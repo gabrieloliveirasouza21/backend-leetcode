@@ -1,0 +1,567 @@
+- slug: ler-formulario-html
+  title: O formulário sem JavaScript
+  difficulty: medio
+  kind: js
+  in: [frontend-basics/HTML, apis/REST]
+  study:
+    - { label: "Enviando dados de formulários (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Learn_web_development/Extensions/Forms/Sending_and_retrieving_form_data" }
+    - { label: "URLSearchParams (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/API/URLSearchParams" }
+  statement: |
+    O formulário de credenciamento é HTML puro: `<form method="post">`. O navegador manda o corpo como `application/x-www-form-urlencoded`, por exemplo `nome=Rita+Lee&veiculo=Rock%20Press&dias=sex&dias=sab`.
+
+    Escreva `lerFormulario(corpo)`, que devolve um objeto com os campos:
+
+    - `+` vale espaço, e `%20` e outras sequências são decodificadas
+    - um campo que aparece uma vez vira texto
+    - um campo que aparece mais de uma vez, como caixas de seleção marcadas, vira um array na ordem em que veio
+  solution: |
+    function lerFormulario(corpo) {
+      const resultado = {};
+      for (const [chave, valor] of new URLSearchParams(corpo)) {
+        if (!Object.hasOwn(resultado, chave)) resultado[chave] = valor;
+        else if (Array.isArray(resultado[chave])) resultado[chave].push(valor);
+        else resultado[chave] = [resultado[chave], valor];
+      }
+      return resultado;
+    }
+  tests:
+    - name: campos simples
+      code: |
+        expect(lerFormulario('nome=Rita+Lee&veiculo=Rock%20Press')).toEqual({ nome: 'Rita Lee', veiculo: 'Rock Press' });
+    - name: campo repetido
+      code: |
+        expect(lerFormulario('dias=sex&dias=sab')).toEqual({ dias: ['sex', 'sab'] });
+    - name: três vezes e acentos
+      hidden: true
+      code: |
+        expect(lerFormulario('d=a&d=b&d=c&cidade=S%C3%A3o+Paulo')).toEqual({ d: ['a', 'b', 'c'], cidade: 'São Paulo' });
+    - name: valores vazios e corpo vazio
+      hidden: true
+      code: |
+        expect(lerFormulario('nome=&obs=')).toEqual({ nome: '', obs: '' });
+        expect(lerFormulario('')).toEqual({});
+    - name: sinais na senha
+      hidden: true
+      code: |
+        expect(lerFormulario('senha=a%2Bb%3Dc%26d')).toEqual({ senha: 'a+b=c&d' });
+  hints:
+    - "`new URLSearchParams(corpo)` já trata `+`, `%` e `&`, e é iterável em pares."
+  explanation: |
+    Formulários HTML funcionam sem JavaScript: o navegador monta o corpo e o backend lê. Esse formato é o padrão de `<form method="post">`, e `multipart/form-data` é usado quando há arquivos. Ler à mão com `split('&')` erra justamente nos sinais codificados.
+  traps:
+    - reason: split sem decodificar
+      code: |
+        function lerFormulario(corpo) {
+          const r = {};
+          for (const par of corpo.split('&').filter(Boolean)) {
+            const [k, v] = par.split('=');
+            r[k] = k in r ? [].concat(r[k], v) : v;
+          }
+          return r;
+        }
+    - reason: Repetidos sobrescrevem
+      code: |
+        function lerFormulario(corpo) {
+          return Object.fromEntries(new URLSearchParams(corpo));
+        }
+
+- slug: post-redirect-get
+  title: A compra que se repete ao atualizar a página
+  difficulty: medio
+  kind: quiz
+  in: [frontend-basics/HTML, apis/REST]
+  study:
+    - { label: "Post/Redirect/Get (Wikipédia, em inglês)", url: "https://en.wikipedia.org/wiki/Post/Redirect/Get" }
+  statement: |
+    O formulário HTML de compra faz `POST /compras`, e o servidor responde com a página de confirmação direto, com status 200. Quando a pessoa aperta F5, o navegador pergunta se deve reenviar o formulário, e algumas pessoas compraram duas vezes.
+
+    Qual é o padrão para evitar isso?
+  options:
+    - text: Responder ao POST com 303 See Other, redirecionando para GET /compras/123. Atualizar a página repete só o GET, que não altera nada
+      why: Certo. É o padrão Post/Redirect/Get.
+    - text: Responder com 200 e pedir para a pessoa não apertar F5
+      why: Pessoas apertam F5, voltam e recarregam. O sistema precisa aguentar.
+    - text: Trocar o formulário por um GET
+      why: GET não deve alterar dados, e os campos ficariam na URL.
+    - text: Desabilitar o botão de voltar do navegador
+      why: Não é possível, e o problema é o reenvio do POST.
+  answer: 0
+  explanation: |
+    Depois de um POST que muda dados, redirecione para uma página que pode ser lida quantas vezes for preciso. O status 303 diz ao navegador para seguir com GET. Uma chave de idempotência no servidor protege também contra cliques duplos.
+
+- slug: servir-css-com-cache
+  title: O CSS novo que ninguém via
+  difficulty: medio
+  kind: quiz
+  in: [frontend-basics/CSS, caching/HTTP Caching]
+  study:
+    - { label: "Cache HTTP (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Caching" }
+  statement: |
+    O backend serve `/estilo.css` com `Cache-Control: max-age=31536000`, um ano. Depois de uma mudança no visual, as pessoas continuaram vendo o CSS antigo por semanas.
+
+    Qual é a prática certa?
+  options:
+    - text: Pôr o hash do conteúdo no nome do arquivo, como estilo.3f9a1c.css, com cache longo e immutable, e servir o HTML com cache curto ou revalidação. Cada versão nova vira uma URL nova
+      why: Certo. O HTML aponta para a URL nova, e o arquivo antigo pode ficar no cache para sempre sem atrapalhar.
+    - text: Nunca guardar CSS em cache
+      why: Funciona, mas cada página baixa o CSS de novo, e o site fica mais lento.
+    - text: Pedir para as pessoas limparem o cache
+      why: Não dá para depender disso.
+    - text: Usar max-age=31536000 também no HTML
+      why: Aí o HTML antigo, que aponta para o CSS antigo, também fica preso no cache.
+  answer: 0
+  explanation: |
+    O backend define como o navegador guarda cada arquivo. Arquivos com hash no nome podem ter cache eterno, porque o conteúdo de uma URL nunca muda. O HTML, que aponta para eles, precisa ser revalidado. Ferramentas de build, como o Vite, geram esses nomes sozinhas.
+
+- slug: tipo-do-arquivo-css
+  title: O navegador ignorou o CSS
+  difficulty: facil
+  kind: quiz
+  in: [frontend-basics/CSS, web-security/Server Security]
+  study:
+    - { label: "X-Content-Type-Options (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Content-Type-Options" }
+  statement: |
+    Depois de mudar de servidor, o site ficou sem estilo. O console mostra que o navegador recusou `estilo.css` porque o tipo é `text/plain`, e o servidor manda `X-Content-Type-Options: nosniff`.
+
+    O que corrigir?
+  options:
+    - text: Configurar o servidor para mandar Content-Type text/css para arquivos .css. Com nosniff, o navegador confia no tipo declarado e não tenta adivinhar
+      why: Certo. O nosniff é uma proteção, e o problema é o tipo errado.
+    - text: Remover o nosniff
+      why: O nosniff evita que arquivos sejam interpretados como algo que não são, por exemplo um upload como script.
+    - text: Renomear o arquivo para .txt
+      why: O navegador continuaria recusando um estilo com tipo errado.
+    - text: Copiar o CSS para dentro do HTML em todas as páginas
+      why: Contorna o sintoma e perde o cache do arquivo.
+  answer: 0
+  explanation: |
+    O cabeçalho Content-Type diz o que é cada resposta. Servidores web têm uma tabela de tipos por extensão, e frameworks costumam acertar sozinhos. Quando um tipo sai errado, o navegador pode recusar o arquivo, ou, sem nosniff, interpretá-lo de um jeito perigoso.
+
+- slug: json-dentro-do-script
+  title: O estado inicial que fechou a tag
+  difficulty: dificil
+  kind: js
+  in: [frontend-basics/JavaScript, web-security/OWASP Risks]
+  study:
+    - { label: "Cross Site Scripting Prevention (OWASP, em inglês)", url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" }
+    - { label: "JSON.stringify (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify" }
+  statement: |
+    O servidor renderiza a página do show e manda o estado inicial assim: `<script>window.SHOW = ${JSON.stringify(show)}</script>`. Uma banda se cadastrou com o nome `</script><script>alert(1)</script>`, e o script rodou.
+
+    Escreva `jsonParaScript(valor)`, que devolve o JSON pronto para ir dentro de uma tag `<script>`:
+
+    - o texto continua sendo um JSON válido, que `JSON.parse` lê com o valor original
+    - não pode conter `<`, `>` nem `&`. Troque cada um pelo escape Unicode do JSON: `<`, `>` e `&`
+    - também troque os caracteres U+2028 e U+2029 por `\u2028` e `\u2029`
+  solution: |
+    function jsonParaScript(valor) {
+      const trocas = { '<': '\\u003c', '>': '\\u003e', '&': '\\u0026', '\u2028': '\\u2028', '\u2029': '\\u2029' };
+      return JSON.stringify(valor).replace(/[<>&\u2028\u2029]/g, (c) => trocas[c]);
+    }
+  tests:
+    - name: fecha a tag não mais
+      code: |
+        const texto = jsonParaScript({ banda: '</script><script>alert(1)</script>' });
+        expect(texto).not.toContain('</script>');
+        expect(texto).not.toContain('<');
+    - name: continua sendo o mesmo JSON
+      code: |
+        const valor = { banda: 'Ferro & Fogo <ao vivo>', preco: 80 };
+        expect(JSON.parse(jsonParaScript(valor))).toEqual(valor);
+    - name: escapes exatos
+      hidden: true
+      code: |
+        expect(jsonParaScript('<>&')).toBe('"\\u003c\\u003e\\u0026"');
+    - name: separadores de linha
+      hidden: true
+      code: |
+        const s = 'a\u2028b\u2029c';
+        const t = jsonParaScript(s);
+        expect(t).toBe('"a\\u2028b\\u2029c"');
+        expect(JSON.parse(t)).toBe(s);
+    - name: comentário de HTML
+      hidden: true
+      code: |
+        expect(jsonParaScript({ x: '<!--' })).not.toContain('<!--');
+  hints:
+    - "`JSON.stringify` não escapa `<`. Faça um `replace` no texto gerado."
+    - Dentro de uma string JSON, `<` vale `<` para o `JSON.parse`, mas o HTML não enxerga uma tag.
+  explanation: |
+    O HTML é lido antes do JavaScript: o navegador procura `</script>` sem saber que está dentro de uma string. Escapar `<` resolve isso sem mudar o valor. Os caracteres U+2028 e U+2029 eram finais de linha em JavaScript antigo e quebravam scripts. Bibliotecas de renderização no servidor, como as do React e do Next.js, fazem esse escape.
+  traps:
+    - reason: Só o JSON.stringify
+      code: |
+        function jsonParaScript(v) {
+          return JSON.stringify(v);
+        }
+    - reason: Troca por entidades HTML, que o script não entende
+      code: |
+        function jsonParaScript(v) {
+          return JSON.stringify(v).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+- slug: mesma-linguagem-nos-dois-lados
+  title: JavaScript no servidor
+  difficulty: facil
+  kind: quiz
+  in: [frontend-basics/JavaScript, backend-language/JavaScript]
+  study:
+    - { label: "Introdução ao Node.js (em inglês)", url: "https://nodejs.org/en/learn/getting-started/introduction-to-nodejs" }
+  statement: |
+    O time do festival escreve o front em JavaScript e quer escrever a API em Node.js. Qual é a diferença mais importante entre rodar JavaScript no navegador e no servidor?
+  options:
+    - text: No servidor, não há DOM nem window, mas há acesso a arquivos, rede e processos. E o código atende muitas pessoas ao mesmo tempo num processo só, então travar o event loop trava todo mundo
+      why: Certo. A linguagem é a mesma, o ambiente e as responsabilidades mudam.
+    - text: Nenhuma, o código do navegador roda igual no servidor
+      why: APIs como document e localStorage não existem no Node.js.
+    - text: No servidor não há promessas nem async
+      why: O Node.js é todo baseado em operações assíncronas.
+    - text: No servidor, cada pessoa tem um processo próprio
+      why: O Node.js atende várias pessoas no mesmo processo, com o event loop.
+  answer: 0
+  explanation: |
+    Node.js roda JavaScript com o motor V8 fora do navegador, com APIs para arquivos, rede e processos. Dividir a linguagem entre front e back permite reaproveitar validações e tipos, mas o código do servidor precisa cuidar de concorrência, segurança e recursos de um jeito que o navegador não exige.
+
+- slug: goroutines-e-canais
+  title: Mil verificações de ingresso em paralelo
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/Go]
+  study:
+    - { label: "Um tour pelo Go: concorrência", url: "https://go.dev/tour/concurrency/1" }
+  statement: |
+    O serviço de check-in em Go precisa validar mil ingressos chamando um serviço externo. O código abre uma goroutine por ingresso, cada uma manda o resultado num canal, e a função principal lê mil vezes do canal.
+
+    O que caracteriza esse modelo?
+  options:
+    - text: Goroutines são funções concorrentes muito leves, gerenciadas pelo runtime do Go, e canais são o jeito idiomático de passar resultados entre elas, sem dividir memória
+      why: Certo. O lema do Go é compartilhar memória comunicando, e não comunicar compartilhando memória.
+    - text: Cada goroutine é uma thread do sistema operacional, então mil goroutines é perigoso
+      why: Goroutines custam poucos KB e são multiplexadas em poucas threads. Milhares delas são comuns.
+    - text: Canais são uma forma de chamar outro servidor
+      why: Canais ligam goroutines dentro do mesmo processo.
+    - text: Go não tem concorrência, só JavaScript tem
+      why: Concorrência é uma das características centrais do Go.
+  answer: 0
+  explanation: |
+    Go é uma linguagem compilada, com tipos estáticos e um runtime que agenda goroutines. Ela é popular em infraestrutura e serviços de rede: Docker, Kubernetes e muitas ferramentas de nuvem são escritos em Go. Na prática, limita-se a concorrência com um conjunto fixo de workers, para não sobrecarregar o serviço externo.
+
+- slug: erros-em-go
+  title: O erro que o Go obriga a olhar
+  difficulty: facil
+  kind: quiz
+  in: [backend-language/Go]
+  study:
+    - { label: "Tratamento de erros em Go (em inglês)", url: "https://go.dev/blog/error-handling-and-go" }
+  statement: |
+    No código Go do serviço de pagamento, quase toda chamada é seguida de `if err != nil { return err }`. Um dev vindo do Java estranha a falta de exceções.
+
+    Qual é a ideia do Go?
+  options:
+    - text: Erros são valores devolvidos junto com o resultado. Quem chama decide na hora o que fazer, e o caminho do erro fica visível no código
+      why: Certo. Go tem panic, mas para situações excepcionais, não para erros esperados como uma rede fora do ar.
+    - text: Go não tem como sinalizar erros
+      why: A convenção é devolver um valor do tipo error, normalmente o último.
+    - text: O if err != nil é opcional e pode ser apagado
+      why: Ignorar o erro deixa o programa seguir com um resultado inválido.
+    - text: Go lança exceções como o Java, com try e catch
+      why: Go não tem try e catch.
+  answer: 0
+  explanation: |
+    Devolver erros como valores deixa o fluxo explícito, ao custo de código repetitivo. Envolver o erro com contexto, como `fmt.Errorf("cobrar pedido %d: %w", id, err)`, monta uma mensagem que explica o caminho até a falha.
+
+- slug: argumento-padrao-mutavel
+  title: A lista que lembrava dos pedidos anteriores
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/Python]
+  study:
+    - { label: "Valores padrão de argumentos (Python)", url: "https://docs.python.org/pt-br/3/tutorial/controlflow.html#default-argument-values" }
+  statement: |
+    Na API em Python, a função abaixo deveria criar um carrinho novo a cada pedido:
+
+    ```
+    def adicionar(item, carrinho=[]):
+        carrinho.append(item)
+        return carrinho
+    ```
+
+    Pessoas diferentes começaram a ver itens umas das outras. Por quê?
+  options:
+    - text: O valor padrão é criado uma vez, quando a função é definida, e a mesma lista é reaproveitada em todas as chamadas. O certo é usar None como padrão e criar a lista dentro da função
+      why: Certo. É uma das armadilhas mais conhecidas do Python.
+    - text: O Python cria uma lista nova a cada chamada, então o problema está em outro lugar
+      why: Ele não cria. O padrão é avaliado uma vez só.
+    - text: append não funciona em listas vazias
+      why: Funciona normalmente.
+    - text: O problema é o nome carrinho
+      why: O nome não importa. O que importa é o objeto compartilhado.
+  answer: 0
+  explanation: |
+    Num servidor, o processo vive por muito tempo e atende muita gente, então estado compartilhado por engano vaza entre pedidos. Python é muito usado em backends com Django, Flask e FastAPI, e em dados e IA.
+
+- slug: async-no-python
+  title: O endpoint async que travou o servidor
+  difficulty: dificil
+  kind: quiz
+  in: [backend-language/Python]
+  study:
+    - { label: "Concorrência e async (FastAPI)", url: "https://fastapi.tiangolo.com/pt/async/" }
+  statement: |
+    Uma rota do FastAPI declarada com `async def` chama `time.sleep(5)` e uma biblioteca HTTP síncrona. Enquanto ela roda, nenhuma outra rota responde.
+
+    O que acontece?
+  options:
+    - text: Funções async rodam no event loop. Uma chamada bloqueante dentro delas para o loop inteiro. Use as versões assíncronas, como asyncio.sleep e um cliente HTTP async, ou declare a rota com def comum, que o FastAPI roda numa thread separada
+      why: Certo. É o mesmo problema de bloquear o event loop no Node.js.
+    - text: O FastAPI é síncrono e não aceita async
+      why: Ele aceita as duas formas e trata cada uma de um jeito.
+    - text: O GIL impede qualquer concorrência no Python
+      why: O GIL limita threads executando bytecode Python ao mesmo tempo, mas esperas de rede e de disco liberam o GIL.
+    - text: É preciso mais servidores
+      why: Cada servidor teria o mesmo loop bloqueado.
+  answer: 0
+  explanation: |
+    asyncio dá concorrência sem threads: enquanto uma tarefa espera a rede, outra roda. Isso só funciona se todas as esperas forem assíncronas. Trabalho pesado de CPU vai para processos separados.
+
+- slug: convencao-no-rails
+  title: O modelo que já sabia a tabela
+  difficulty: facil
+  kind: quiz
+  in: [backend-language/Ruby, more-databases/ORMs]
+  study:
+    - { label: "Active Record básico (Rails Guides, em inglês)", url: "https://guides.rubyonrails.org/active_record_basics.html" }
+  statement: |
+    No sistema de credenciamento em Ruby on Rails, a classe `class Credential < ApplicationRecord; end` lê e grava a tabela `credentials` sem nenhuma configuração.
+
+    Que princípio é esse?
+  options:
+    - text: Convenção sobre configuração. O Rails deduz a tabela pelo nome da classe, no plural, e o mesmo vale para chaves, rotas e pastas
+      why: Certo. Seguindo as convenções, quase nada precisa ser configurado.
+    - text: Mágica que não pode ser alterada
+      why: Toda convenção pode ser trocada por configuração explícita quando necessário.
+    - text: O Rails cria uma tabela nova a cada pedido
+      why: A tabela vem das migrações. O modelo só a encontra pelo nome.
+    - text: Ruby não precisa de banco de dados
+      why: O Active Record é justamente a camada de banco do Rails.
+  answer: 0
+  explanation: |
+    Ruby é uma linguagem dinâmica, e o Rails a tornou popular para aplicações web. Active Record é ao mesmo tempo um padrão e o ORM do Rails, e suas convenções aceleram o desenvolvimento. O custo é que o comportamento fica menos explícito para quem não conhece as convenções.
+
+- slug: nil-no-ruby
+  title: undefined method for nil
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/Ruby]
+  study:
+    - { label: "Operador de navegação segura (Ruby, em inglês)", url: "https://docs.ruby-lang.org/en/master/syntax/calling_methods_rdoc.html#label-Safe+Navigation+Operator" }
+  statement: |
+    A página do credenciado quebra com `undefined method 'name' for nil` na linha `credential.company.name`, para quem não tem empresa.
+
+    Qual correção expressa a intenção em Ruby?
+  options:
+    - text: "credential.company&.name, que devolve nil quando company é nil, e a tela mostra um texto padrão nesse caso"
+      why: Certo. O operador &. só chama o método quando o objeto não é nil.
+    - text: Envolver a página inteira num rescue que ignora qualquer erro
+      why: Isso esconde todos os erros, não só esse.
+    - text: Apagar os credenciados sem empresa
+      why: Ter empresa é opcional. O código precisa tratar a ausência.
+    - text: Trocar company por company.to_s
+      why: to_s de um objeto devolve outra coisa, e de nil devolve texto vazio, sem chamar name.
+  answer: 0
+  explanation: |
+    Em Ruby, tudo é objeto, inclusive nil, e chamar um método que nil não tem gera NoMethodError. A navegação segura &. evita a cadeia de verificações. JavaScript tem o equivalente ?., e Kotlin e C# também.
+
+- slug: comparar-strings-em-java
+  title: O cupom certo foi recusado
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/Java]
+  study:
+    - { label: "String.equals (Java, em inglês)", url: "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html#equals(java.lang.Object)" }
+  statement: |
+    No serviço de cupons em Java, `if (cupom == "METAL10")` funcionava nos testes e falha com cupons que chegam pela API.
+
+    Por quê?
+  options:
+    - text: Em Java, == compara se são o mesmo objeto. Textos vindos da rede são objetos novos. Para comparar o conteúdo, use cupom.equals("METAL10") ou "METAL10".equals(cupom)
+      why: Certo. Nos testes, os literais iguais eram o mesmo objeto, por causa do pool de strings.
+    - text: Java não compara textos
+      why: Compara, com equals.
+    - text: O cupom chega com letras trocadas
+      why: O texto chega igual. A comparação é que está olhando outra coisa.
+    - text: É preciso converter o cupom para número
+      why: Cupons são texto.
+  answer: 0
+  explanation: |
+    Java é uma linguagem orientada a objetos e com tipos estáticos, que roda na JVM. É muito usada em grandes empresas, com frameworks como Spring. Para objetos, == compara referências, e equals compara conteúdo. Pôr o literal primeiro também evita NullPointerException quando cupom é null.
+
+- slug: threads-virtuais-java
+  title: Dez mil conexões esperando o banco
+  difficulty: dificil
+  kind: quiz
+  in: [backend-language/Java]
+  study:
+    - { label: "Threads virtuais (Java, em inglês)", url: "https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html" }
+  statement: |
+    A API em Java usa uma thread do sistema por pedido. Com 10 mil pedidos esperando o banco ao mesmo tempo, o servidor fica sem memória para tantas threads.
+
+    O que o Java 21 trouxe para esse caso?
+  options:
+    - text: Threads virtuais, leves e gerenciadas pela JVM. Quando uma delas espera rede ou banco, ela libera a thread do sistema, e o código continua no estilo simples de uma thread por pedido
+      why: Certo. É uma ideia parecida com as goroutines do Go.
+    - text: O Java removeu as threads
+      why: As threads de plataforma continuam existindo. As virtuais são uma alternativa para tarefas que esperam muito.
+    - text: Só reescrevendo tudo com callbacks
+      why: Estilos reativos resolvem, mas as threads virtuais evitam essa reescrita.
+    - text: Aumentar a memória resolve para sempre
+      why: Cada thread de plataforma reserva memória, e o limite volta a aparecer com mais carga.
+  answer: 0
+  explanation: |
+    Servidores que esperam muito por I/O precisam de concorrência barata. Node.js resolve com o event loop, Go com goroutines, e o Java, desde a versão 21, com threads virtuais. O código continua sequencial e fácil de ler.
+
+- slug: async-await-em-csharp
+  title: O .Result que travou a API
+  difficulty: dificil
+  kind: quiz
+  in: [backend-language/C#]
+  study:
+    - { label: "Programação assíncrona com async e await (C#)", url: "https://learn.microsoft.com/pt-br/dotnet/csharp/asynchronous-programming/" }
+  statement: |
+    Na API de credenciamento em C#, um dev chamou `var pedido = ObterPedidoAsync(id).Result;` dentro de um controller, para "não precisar de async". Sob carga, a API passou a esgotar as threads e a responder devagar.
+
+    O que fazer?
+  options:
+    - text: Usar await de ponta a ponta, com o controller também async. .Result bloqueia uma thread esperando a operação, e com muitos pedidos as threads do pool acabam
+      why: Certo. A recomendação é async all the way.
+    - text: Trocar .Result por .Wait()
+      why: .Wait() também bloqueia a thread do mesmo jeito.
+    - text: Aumentar o número mínimo de threads
+      why: Adia o problema e gasta memória, e o bloqueio continua.
+    - text: Remover o async do método ObterPedidoAsync
+      why: A operação de rede continuaria esperando, agora bloqueando sempre.
+  answer: 0
+  explanation: |
+    C# introduziu async e await, que depois chegaram ao JavaScript e a outras linguagens. A plataforma .NET, com ASP.NET Core, roda em Windows, Linux e containers. Bloquear sobre código assíncrono desperdiça threads e, em alguns contextos, causa deadlocks.
+
+- slug: comparacao-frouxa-no-php
+  title: Dois hashes diferentes e iguais
+  difficulty: dificil
+  kind: quiz
+  in: [backend-language/PHP, web-security/MD5]
+  study:
+    - { label: "Operadores de comparação (PHP)", url: "https://www.php.net/manual/pt_BR/language.operators.comparison.php" }
+  statement: |
+    Um sistema antigo em PHP 7 conferia tokens com `if (md5($senha) == $hashGuardado)`. Uma auditoria achou duas senhas diferentes que passavam como iguais: os hashes eram `0e462097431906509019562988736854` e `0e830400451993494058024219903391`.
+
+    Por quê?
+  options:
+    - text: Com ==, textos que parecem números são comparados como números, e 0e seguido de dígitos vale 0 em notação científica. O certo é === e, para senhas, password_hash e password_verify
+      why: Certo. === compara o tipo e o valor sem conversões.
+    - text: O MD5 gerou o mesmo hash para as duas senhas
+      why: Os hashes são diferentes. A comparação é que os tratou como números iguais.
+    - text: O PHP não compara textos
+      why: Compara, mas == faz conversões de tipo que surpreendem.
+    - text: É um defeito do banco de dados
+      why: A comparação aconteceu no PHP.
+  answer: 0
+  explanation: |
+    PHP roda boa parte da web, com WordPress e Laravel. As versões novas corrigiram várias comparações estranhas, mas o hábito de usar === e as funções próprias de senha continua essencial. password_hash usa bcrypt por padrão.
+
+- slug: modelo-de-execucao-do-php
+  title: Cada pedido começa do zero
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/PHP]
+  study:
+    - { label: "PHP-FPM (PHP)", url: "https://www.php.net/manual/pt_BR/install.fpm.php" }
+  statement: |
+    Um dev guardou um contador de visitas numa variável global do script PHP, esperando que ela aumentasse a cada acesso. Ela sempre volta a 1.
+
+    O que explica?
+  options:
+    - text: No modelo tradicional, com PHP-FPM, cada pedido executa o script do zero e descarta tudo no fim. O estado entre pedidos fica fora do processo, no banco, no Redis ou na sessão
+      why: Certo. O modelo "nada compartilhado" simplifica muito e faz um pedido não vazar dados para outro.
+    - text: O PHP apaga variáveis globais por segurança
+      why: Elas existem durante o pedido e somem quando ele termina, como todas as outras.
+    - text: O contador precisa ser uma constante
+      why: Constantes não mudam.
+    - text: É um bug que se corrige reiniciando o servidor
+      why: É o funcionamento normal do PHP.
+  answer: 0
+  explanation: |
+    Esse modelo é diferente do Node.js, do Go e do Java, em que o processo fica vivo e atende muitos pedidos. Servidores PHP de longa duração, como Swoole e FrankenPHP, existem, e com eles o estado compartilhado volta a exigir cuidado.
+
+- slug: posse-no-rust
+  title: O valor que foi movido
+  difficulty: dificil
+  kind: quiz
+  in: [backend-language/Rust]
+  study:
+    - { label: "Entendendo ownership (Rust, em inglês)", url: "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html" }
+  statement: |
+    No serviço de entradas em Rust, este código não compila:
+
+    ```
+    let ingresso = String::from("A-123");
+    registrar(ingresso);
+    println!("{}", ingresso);
+    ```
+
+    O compilador diz `borrow of moved value: ingresso`. O que aconteceu?
+  options:
+    - text: Ao passar a String para registrar, a posse do valor foi movida para a função, e a variável deixou de valer. Se registrar só precisa ler, ela deve receber uma referência, &ingresso
+      why: Certo. O sistema de posse garante, na compilação, que a memória é liberada uma vez só e nunca usada depois.
+    - text: Rust não deixa imprimir textos
+      why: println! imprime normalmente. O problema é usar um valor que já foi movido.
+    - text: É um erro que só aparece na execução
+      why: É um erro de compilação. O programa nem chega a rodar.
+    - text: Basta declarar a variável duas vezes
+      why: Isso cria outra variável e não resolve a posse do valor.
+  answer: 0
+  explanation: |
+    Rust gerencia memória sem coletor de lixo: cada valor tem um dono, e empréstimos são verificados pelo compilador. Isso elimina classes inteiras de bugs, como uso depois de liberar e corridas de dados, com desempenho de C. O custo é uma curva de aprendizado maior.
+
+- slug: result-no-rust
+  title: O ponto de interrogação do Rust
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/Rust]
+  study:
+    - { label: "Erros recuperáveis com Result (Rust, em inglês)", url: "https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html" }
+  statement: |
+    Uma função do serviço em Rust termina cada chamada com `?`, como `let show = buscar_show(id)?;`. O que esse operador faz?
+  options:
+    - text: Se o Result for Ok, extrai o valor. Se for Err, devolve o erro imediatamente para quem chamou a função
+      why: Certo. É o equivalente conciso do if err != nil do Go.
+    - text: Ignora o erro e segue com um valor vazio
+      why: 'Ele não ignora: devolve o erro para cima.'
+    - text: Transforma a função em assíncrona
+      why: Assincronia em Rust usa async e await.
+    - text: Imprime uma pergunta no terminal
+      why: É um operador de propagação de erros.
+  answer: 0
+  explanation: |
+    Em Rust, operações que podem falhar devolvem Result, que é Ok com o valor ou Err com o erro, e o compilador obriga a tratar os dois casos. O `?` deixa o caminho feliz legível sem esconder os erros, como acontece com exceções.
+
+- slug: escolher-a-linguagem
+  title: Qual linguagem para a API nova
+  difficulty: medio
+  kind: quiz
+  in: [backend-language/Go, backend-language/Python, backend-language/Java, backend-language/C#]
+  study:
+    - { label: "Roadmap de backend (roadmap.sh)", url: "https://roadmap.sh/backend" }
+  statement: |
+    O festival vai criar a API de ingressos do zero. O time tem quatro devs experientes em Python, e ninguém conhece Go ou Rust. Qual critério deve pesar mais?
+  options:
+    - text: O que o time já domina e o ecossistema para o problema. Qualquer linguagem popular de backend aguenta a carga de um festival com uma boa arquitetura, e trocar de linguagem custa meses de aprendizado
+      why: Certo. Para a maioria dos sistemas, banco, cache e arquitetura pesam mais que a linguagem.
+    - text: A linguagem mais rápida em benchmarks
+      why: Benchmarks raramente refletem o gargalo real, que costuma ser banco e rede.
+    - text: A linguagem mais nova
+      why: Novidade não garante bibliotecas maduras nem gente disponível para contratar.
+    - text: Uma linguagem diferente para cada endpoint
+      why: Isso multiplica a manutenção sem benefício claro.
+  answer: 0
+  explanation: |
+    Linguagens de backend diferem em desempenho, concorrência, tipagem e ecossistema, mas todas as populares sustentam sistemas grandes. Go e Rust brilham em infraestrutura e alto desempenho, Java e C# em grandes empresas, Python em dados e IA, e JavaScript quando o time é o mesmo do front.

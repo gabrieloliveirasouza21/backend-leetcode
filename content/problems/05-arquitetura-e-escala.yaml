@@ -1,0 +1,1558 @@
+- slug: comecar-pelo-monolito
+  title: Três devs e doze microsserviços
+  difficulty: medio
+  kind: quiz
+  in: [architectural-patterns/Monolith, architectural-patterns/Microservices]
+  study:
+    - { label: "MonolithFirst (Martin Fowler, em inglês)", url: "https://martinfowler.com/bliki/MonolithFirst.html" }
+  statement: |
+    O festival tem três devs e um sistema novo de ingressos para lançar em dois meses. Alguém propôs começar com doze microsserviços, "para já nascer escalável".
+
+    Qual é a escolha mais sensata?
+  options:
+    - text: Um monolito modular, com fronteiras claras entre módulos dentro de um só deploy. Se um módulo precisar escalar ou evoluir sozinho, ele é extraído depois
+      why: Certo. Microsserviços resolvem problemas de times grandes e cobram caro em operação, rede e consistência.
+    - text: Doze microsserviços, porque monolitos não escalam
+      why: Monolitos escalam com várias cópias atrás de um balanceador. O custo dos microsserviços vem antes dos benefícios.
+    - text: Um monolito sem nenhuma organização interna
+      why: Sem fronteiras, extrair um serviço depois fica muito mais difícil.
+    - text: Um microsserviço por tabela do banco
+      why: Isso espalha cada regra de negócio por vários serviços que precisam conversar o tempo todo.
+  answer: 0
+  explanation: |
+    Um monolito tem um código, um deploy e, normalmente, um banco. É simples de desenvolver, testar e operar. Os problemas aparecem com muitos times mexendo no mesmo deploy, e é aí que separar serviços começa a compensar.
+
+- slug: deploy-do-monolito
+  title: Um bug no módulo de merch travou tudo
+  difficulty: medio
+  kind: quiz
+  in: [architectural-patterns/Monolith]
+  study:
+    - { label: "Microservices (Martin Fowler, em inglês)", url: "https://martinfowler.com/articles/microservices.html" }
+  statement: |
+    O sistema cresceu para cinco times num só monolito. Um bug no módulo de merch segurou o deploy de uma correção urgente na venda de ingressos, e um vazamento de memória no relatório derrubou o checkout.
+
+    O que esses sintomas mostram?
+  options:
+    - text: 'Os custos de acoplamento do monolito: um deploy e um processo para tudo. É o momento de avaliar extrair os módulos com ritmos e cargas diferentes, como o checkout'
+      why: Certo. A decisão de separar vem de dores concretas como essas, não de moda.
+    - text: Que o monolito foi mal programado e precisa ser reescrito do zero
+      why: Reescritas completas são arriscadas. Extrair partes aos poucos costuma funcionar melhor.
+    - text: Que os cinco times devem trabalhar em turnos
+      why: Isso trata o sintoma organizacional sem resolver o acoplamento técnico.
+    - text: Nada, monolitos não têm esse tipo de problema
+      why: Deploy único e falhas compartilhadas são exatamente as limitações conhecidas.
+  answer: 0
+  explanation: |
+    Num monolito, todos os módulos compartilham o ciclo de deploy e os recursos do processo. Separar serviços dá isolamento de falhas e deploys independentes, ao custo de chamadas pela rede, dados distribuídos e mais infraestrutura.
+
+- slug: banco-compartilhado
+  title: Dois serviços, uma tabela
+  difficulty: dificil
+  kind: quiz
+  in: [architectural-patterns/Microservices]
+  study:
+    - { label: "Database per service (microservices.io, em inglês)", url: "https://microservices.io/patterns/data/database-per-service.html" }
+  statement: |
+    Os serviços de ingressos e de check-in leem e gravam a mesma tabela `tickets`. O time de ingressos renomeou uma coluna e o check-in parou no dia do show.
+
+    Qual é o princípio quebrado?
+  options:
+    - text: Cada serviço deve ser dono dos próprios dados. Os outros acessam por uma API ou recebem eventos, e a tabela vira detalhe interno, livre para mudar
+      why: Certo. Banco compartilhado acopla os serviços pelo esquema, e eles deixam de ser independentes.
+    - text: Faltou um índice na tabela
+      why: O problema é o acoplamento pelo esquema, não o desempenho.
+    - text: Serviços nunca devem mudar colunas
+      why: Mudar o esquema é normal. O problema é outro serviço depender dele.
+    - text: Os dois serviços deveriam usar o mesmo usuário do banco
+      why: Isso não muda o acoplamento.
+  answer: 0
+  explanation: |
+    Microsserviços são independentes quando cada um decide o próprio esquema e publica uma interface estável. O preço é que consultas entre serviços viram chamadas ou cópias de dados, e transações entre eles viram sagas.
+
+- slug: saga-com-compensacao
+  title: A compra em três serviços
+  difficulty: dificil
+  kind: js
+  in: [architectural-patterns/Microservices, more-databases/Transactions]
+  study:
+    - { label: "Saga (microservices.io, em inglês)", url: "https://microservices.io/patterns/data/saga.html" }
+  statement: |
+    A compra reserva o assento no serviço de ingressos, cobra no serviço de pagamentos e emite o QR code. Não há uma transação única entre os três serviços.
+
+    Escreva `async function executarSaga(passos)`. Cada passo é `{ fazer, desfazer }`, duas funções assíncronas.
+
+    - execute os passos em ordem
+    - se um passo falhar, desfaça os que já deram certo, do último para o primeiro, e rejeite com o erro original
+    - o passo que falhou não é desfeito, porque não chegou a acontecer
+  solution: |
+    async function executarSaga(passos) {
+      const feitos = [];
+      for (const passo of passos) {
+        try {
+          await passo.fazer();
+        } catch (erro) {
+          for (const feito of feitos.reverse()) await feito.desfazer();
+          throw erro;
+        }
+        feitos.push(passo);
+      }
+    }
+  tests:
+    - name: tudo certo
+      code: |
+        const log = [];
+        const passo = (n) => ({ fazer: async () => log.push('fazer ' + n), desfazer: async () => log.push('desfazer ' + n) });
+        await executarSaga([passo('assento'), passo('cobrança'), passo('qr')]);
+        expect(log).toEqual(['fazer assento', 'fazer cobrança', 'fazer qr']);
+    - name: falha na cobrança
+      code: |
+        const log = [];
+        const passo = (n) => ({ fazer: async () => log.push('fazer ' + n), desfazer: async () => log.push('desfazer ' + n) });
+        const falha = { fazer: async () => { throw new Error('cartão recusado'); }, desfazer: async () => log.push('desfazer cobrança') };
+        await expect(executarSaga([passo('assento'), falha, passo('qr')])).rejects.toMatch('cartão recusado');
+        expect(log).toEqual(['fazer assento', 'desfazer assento']);
+    - name: desfaz do último para o primeiro
+      hidden: true
+      code: |
+        const log = [];
+        const passo = (n) => ({ fazer: async () => log.push('fazer ' + n), desfazer: async () => log.push('desfazer ' + n) });
+        const falha = { fazer: async () => { throw new Error('x'); }, desfazer: async () => log.push('desfazer falha') };
+        await executarSaga([passo('a'), passo('b'), passo('c'), falha]).catch(() => {});
+        expect(log).toEqual(['fazer a', 'fazer b', 'fazer c', 'desfazer c', 'desfazer b', 'desfazer a']);
+    - name: falha no primeiro passo
+      hidden: true
+      code: |
+        const desfazer = fn(async () => {});
+        await expect(executarSaga([{ fazer: async () => { throw new Error('fora do ar'); }, desfazer }])).rejects.toMatch('fora do ar');
+        expect(desfazer).toHaveBeenCalledTimes(0);
+  hints:
+    - Guarde os passos que deram certo numa lista. No `catch`, percorra essa lista de trás para a frente.
+  explanation: |
+    Uma saga troca a transação única por uma sequência de transações locais, cada uma com uma compensação. Compensar não é apagar: estornar a cobrança e liberar o assento são ações de negócio. Em produção, a saga guarda o progresso, para continuar ou compensar mesmo se o processo cair no meio.
+  traps:
+    - reason: Desfaz na ordem em que fez
+      code: |
+        async function executarSaga(passos) {
+          const feitos = [];
+          for (const p of passos) {
+            try { await p.fazer(); } catch (e) { for (const f of feitos) await f.desfazer(); throw e; }
+            feitos.push(p);
+          }
+        }
+    - reason: Desfaz também o passo que falhou
+      code: |
+        async function executarSaga(passos) {
+          const feitos = [];
+          for (const p of passos) {
+            feitos.push(p);
+            try { await p.fazer(); } catch (e) { for (const f of feitos.reverse()) await f.desfazer(); throw e; }
+          }
+        }
+
+- slug: barramento-do-soa
+  title: O barramento corporativo
+  difficulty: medio
+  kind: quiz
+  in: [architectural-patterns/SOA]
+  study:
+    - { label: "Arquitetura orientada a serviços (Wikipédia)", url: "https://pt.wikipedia.org/wiki/Service-oriented_architecture" }
+  statement: |
+    A empresa que vende os ingressos tem uma arquitetura de 2010: sistemas grandes de vendas, financeiro e estoque, todos ligados por um ESB, um barramento central que transforma e roteia as mensagens SOAP entre eles.
+
+    O que diferencia esse SOA dos microsserviços?
+  options:
+    - text: No SOA, serviços maiores reaproveitados pela empresa toda conversam por um barramento central, com muita lógica de integração nele. Microsserviços são menores, com pontas inteligentes e canais simples
+      why: Certo. O ESB centraliza a integração, e com o tempo vira um ponto de acoplamento e de gargalo.
+    - text: Não há diferença nenhuma
+      why: As ideias se parecem, mas o tamanho dos serviços e o papel da infraestrutura central mudam bastante.
+    - text: SOA não usa a rede
+      why: Os serviços do SOA também conversam pela rede, normalmente por SOAP.
+    - text: Microsserviços sempre usam um ESB
+      why: Microsserviços evitam lógica de negócio na infraestrutura de comunicação.
+  answer: 0
+  explanation: |
+    SOA, arquitetura orientada a serviços, organiza sistemas em serviços reutilizáveis com contratos formais. Microsserviços herdaram a ideia, trocando o barramento central por HTTP, filas simples e times donos de cada serviço.
+
+- slug: service-mesh-e-sidecar
+  title: mTLS sem mexer no código
+  difficulty: dificil
+  kind: quiz
+  in: [architectural-patterns/Service Mesh, containerization/Kubernetes]
+  study:
+    - { label: "O que é um service mesh (Istio, em inglês)", url: "https://istio.io/latest/about/service-mesh/" }
+  statement: |
+    São trinta serviços em cinco linguagens no Kubernetes. A segurança exige tráfego cifrado e autenticado entre todos eles, com métricas de latência por rota, e ninguém quer reimplementar isso em cada linguagem.
+
+    Como um service mesh, como Istio ou Linkerd, resolve?
+  options:
+    - text: Um proxy roda ao lado de cada serviço, o sidecar, e intercepta o tráfego. Ele aplica mTLS, retentativas e tempos limite e coleta métricas, configurado por um plano de controle central
+      why: Certo. As funções de rede saem do código da aplicação e vão para a infraestrutura.
+    - text: Ele reescreve o código dos serviços automaticamente
+      why: O código não muda. O proxy cuida do tráfego por fora.
+    - text: Ele substitui o Kubernetes
+      why: O mesh roda em cima do orquestrador, não no lugar dele.
+    - text: Ele elimina a latência da rede
+      why: O proxy acrescenta um pouco de latência, em troca de segurança e visibilidade.
+  answer: 0
+  explanation: |
+    Service mesh é uma camada de infraestrutura para comunicação entre serviços. Ele faz sentido com muitos serviços e times. Com poucos serviços, a complexidade extra costuma não compensar.
+
+- slug: configuracao-pelo-ambiente
+  title: A configuração que vem do ambiente
+  difficulty: medio
+  kind: js
+  in: [architectural-patterns/Twelve Factor Apps, containerization/Docker]
+  study:
+    - { label: "The Twelve-Factor App: config", url: "https://12factor.net/pt_br/config" }
+  statement: |
+    O mesmo container roda em teste e em produção, e só as variáveis de ambiente mudam. Escreva `lerConfig(env)`, que devolve `{ porta, bancoUrl, debug }`:
+
+    - `DATABASE_URL` é obrigatória
+    - `PORT` é opcional, com padrão `3000`, e precisa ser um inteiro de 1 a 65535
+    - `DEBUG` é opcional, com padrão `false`, e só aceita `'true'` ou `'false'`
+
+    Se houver problemas, lance um único erro cuja mensagem cite o nome de todas as variáveis com problema, para quem sobe o serviço corrigir tudo de uma vez.
+  solution: |
+    function lerConfig(env) {
+      const problemas = [];
+      const bancoUrl = env.DATABASE_URL;
+      if (!bancoUrl) problemas.push('DATABASE_URL é obrigatória');
+      let porta = 3000;
+      if (env.PORT !== undefined) {
+        porta = Number(env.PORT);
+        if (!/^\d+$/.test(env.PORT) || porta < 1 || porta > 65535) problemas.push('PORT precisa ser um inteiro de 1 a 65535');
+      }
+      let debug = false;
+      if (env.DEBUG !== undefined) {
+        if (env.DEBUG === 'true') debug = true;
+        else if (env.DEBUG !== 'false') problemas.push("DEBUG precisa ser 'true' ou 'false'");
+      }
+      if (problemas.length) throw new Error(problemas.join('; '));
+      return { porta, bancoUrl, debug };
+    }
+  tests:
+    - name: padrões
+      code: |
+        expect(lerConfig({ DATABASE_URL: 'postgres://db/festival' })).toEqual({ porta: 3000, bancoUrl: 'postgres://db/festival', debug: false });
+    - name: valores informados
+      code: |
+        expect(lerConfig({ DATABASE_URL: 'x', PORT: '8080', DEBUG: 'true' })).toEqual({ porta: 8080, bancoUrl: 'x', debug: true });
+    - name: banco ausente
+      hidden: true
+      code: |
+        expect(() => lerConfig({})).toThrow('DATABASE_URL');
+    - name: todos os problemas de uma vez
+      hidden: true
+      code: |
+        let mensagem = '';
+        try { lerConfig({ PORT: 'abc', DEBUG: 'sim' }); } catch (e) { mensagem = e.message; }
+        expect(mensagem).toContain('DATABASE_URL');
+        expect(mensagem).toContain('PORT');
+        expect(mensagem).toContain('DEBUG');
+    - name: porta fora do intervalo
+      hidden: true
+      code: |
+        expect(() => lerConfig({ DATABASE_URL: 'x', PORT: '0' })).toThrow('PORT');
+        expect(() => lerConfig({ DATABASE_URL: 'x', PORT: '70000' })).toThrow('PORT');
+        expect(() => lerConfig({ DATABASE_URL: 'x', PORT: '80.5' })).toThrow('PORT');
+  hints:
+    - Variáveis de ambiente são sempre texto. `'false'` é um texto não vazio, e portanto verdadeiro num `if`.
+    - Junte os problemas numa lista e lance o erro só no fim.
+  explanation: |
+    O fator III do Twelve-Factor App diz para guardar a configuração no ambiente, separada do código. O mesmo artefato roda em qualquer lugar, e segredos não vão para o repositório. Validar tudo ao iniciar faz o serviço falhar cedo, com uma mensagem clara, em vez de quebrar no primeiro pedido.
+  traps:
+    - reason: Trata o texto 'false' como verdadeiro
+      code: |
+        function lerConfig(env) {
+          if (!env.DATABASE_URL) throw new Error('DATABASE_URL');
+          const porta = env.PORT === undefined ? 3000 : Number(env.PORT);
+          if (!Number.isInteger(porta) || porta < 1 || porta > 65535) throw new Error('PORT');
+          return { porta, bancoUrl: env.DATABASE_URL, debug: Boolean(env.DEBUG) };
+        }
+    - reason: Para no primeiro problema
+      code: |
+        function lerConfig(env) {
+          if (!env.DATABASE_URL) throw new Error('DATABASE_URL');
+          const porta = env.PORT === undefined ? 3000 : Number(env.PORT);
+          if (!/^\d+$/.test(env.PORT ?? '3000') || porta < 1 || porta > 65535) throw new Error('PORT');
+          if (env.DEBUG !== undefined && env.DEBUG !== 'true' && env.DEBUG !== 'false') throw new Error('DEBUG');
+          return { porta, bancoUrl: env.DATABASE_URL, debug: env.DEBUG === 'true' };
+        }
+
+- slug: ack-no-rabbitmq
+  title: O e-mail de confirmação que sumiu
+  difficulty: medio
+  kind: quiz
+  visual: fila
+  in: [message-brokers/RabbitMQ]
+  study:
+    - { label: "Confirmações de consumidores (RabbitMQ, em inglês)", url: "https://www.rabbitmq.com/docs/confirms" }
+  statement: |
+    O serviço de e-mails consome a fila `compras` do RabbitMQ com confirmação automática. Num deploy, o processo foi encerrado enquanto enviava 40 e-mails, e esses e-mails nunca saíram.
+
+    O que mudar?
+  options:
+    - text: Usar confirmação manual e mandar o ack só depois de enviar o e-mail. Se o consumidor cair antes, o RabbitMQ entrega a mensagem de novo
+      why: Certo. Com ack automático, a mensagem sai da fila assim que é entregue, antes de ser processada.
+    - text: Aumentar o tamanho da fila
+      why: O tamanho não muda o momento em que a mensagem é considerada processada.
+    - text: Nunca fazer deploy
+      why: Processos caem por muitos motivos além de deploys.
+    - text: Mandar o ack antes de enviar, para ganhar velocidade
+      why: É o mesmo problema do ack automático.
+  answer: 0
+  explanation: |
+    RabbitMQ é um broker de mensagens com filas e exchanges, que distribui mensagens para consumidores. Com ack manual, a entrega é pelo menos uma vez: a mensagem pode chegar duas vezes, então o consumidor precisa ser idempotente. O prefetch limita quantas mensagens cada consumidor recebe sem confirmar.
+
+- slug: fila-de-mensagens-mortas
+  title: A mensagem que falha para sempre
+  difficulty: medio
+  kind: js
+  visual: fila
+  in: [message-brokers/RabbitMQ, more-databases/Failure Modes]
+  study:
+    - { label: "Dead letter exchanges (RabbitMQ, em inglês)", url: "https://www.rabbitmq.com/docs/dlx" }
+  statement: |
+    Uma mensagem com dados inválidos falhava, voltava para a fila e falhava de novo, sem parar, e travava o consumidor. Escreva `criarConsumidor(processar, maxTentativas)`, que devolve `async function receber(mensagem)`.
+
+    Cada mensagem é `{ corpo, tentativas }`: `corpo` é um texto JSON e `tentativas` conta as entregas anteriores, começando em 0. `receber` devolve a decisão:
+
+    - `'ack'`: o JSON foi lido e `processar(objeto)` terminou sem erro
+    - `'dead-letter'`: o JSON é inválido, porque tentar de novo não vai consertar, ou esta foi a entrega de número `maxTentativas`
+    - `'requeue'`: `processar` falhou e ainda há tentativas
+  solution: |
+    function criarConsumidor(processar, maxTentativas) {
+      return async function receber(mensagem) {
+        let objeto;
+        try {
+          objeto = JSON.parse(mensagem.corpo);
+        } catch {
+          return 'dead-letter';
+        }
+        try {
+          await processar(objeto);
+          return 'ack';
+        } catch {
+          return mensagem.tentativas + 1 >= maxTentativas ? 'dead-letter' : 'requeue';
+        }
+      };
+    }
+  tests:
+    - name: sucesso
+      code: |
+        const processar = fn(async () => {});
+        const receber = criarConsumidor(processar, 3);
+        expect(await receber({ corpo: '{"pedido":7}', tentativas: 0 })).toBe('ack');
+        expect(processar).toHaveBeenCalledWith({ pedido: 7 });
+    - name: falha com tentativas sobrando
+      code: |
+        const receber = criarConsumidor(async () => { throw new Error('smtp fora'); }, 3);
+        expect(await receber({ corpo: '{}', tentativas: 0 })).toBe('requeue');
+    - name: última tentativa
+      hidden: true
+      code: |
+        const receber = criarConsumidor(async () => { throw new Error('smtp fora'); }, 3);
+        expect(await receber({ corpo: '{}', tentativas: 1 })).toBe('requeue');
+        expect(await receber({ corpo: '{}', tentativas: 2 })).toBe('dead-letter');
+    - name: JSON inválido vai direto
+      hidden: true
+      code: |
+        const processar = fn(async () => {});
+        const receber = criarConsumidor(processar, 5);
+        expect(await receber({ corpo: '{pedido: 7', tentativas: 0 })).toBe('dead-letter');
+        expect(processar).toHaveBeenCalledTimes(0);
+  hints:
+    - 'Separe os dois `try`: um para ler o JSON e outro para processar.'
+  explanation: |
+    Uma fila de mensagens mortas guarda o que não pôde ser processado, para análise, sem travar o resto. Erros permanentes, como dados inválidos, vão direto para ela. Erros temporários, como um servidor de e-mail fora do ar, merecem algumas tentativas.
+  traps:
+    - reason: JSON inválido volta para a fila
+      code: |
+        function criarConsumidor(processar, max) {
+          return async (m) => {
+            try { await processar(JSON.parse(m.corpo)); return 'ack'; }
+            catch { return m.tentativas + 1 >= max ? 'dead-letter' : 'requeue'; }
+          };
+        }
+    - reason: Uma tentativa a mais
+      code: |
+        function criarConsumidor(processar, max) {
+          return async (m) => {
+            let o;
+            try { o = JSON.parse(m.corpo); } catch { return 'dead-letter'; }
+            try { await processar(o); return 'ack'; } catch { return m.tentativas >= max ? 'dead-letter' : 'requeue'; }
+          };
+        }
+
+- slug: ordem-no-kafka
+  title: O cancelamento chegou antes da compra
+  difficulty: dificil
+  kind: quiz
+  visual: fila
+  in: [message-brokers/Kafka]
+  study:
+    - { label: "Introdução ao Kafka (em inglês)", url: "https://kafka.apache.org/intro" }
+  statement: |
+    O tópico `ingressos` tem 12 partições, e os eventos são publicados sem chave. O consumidor recebeu o `cancelado` de um ingresso antes do `comprado` do mesmo ingresso.
+
+    Como garantir a ordem dos eventos de cada ingresso?
+  options:
+    - text: Publicar com o id do ingresso como chave. Eventos com a mesma chave vão para a mesma partição, e o Kafka garante a ordem dentro de cada partição
+      why: Certo. A ordem no Kafka é por partição, não pelo tópico inteiro.
+    - text: Usar uma partição só
+      why: Garante a ordem, mas limita o tópico a um consumidor por grupo e perde o paralelismo.
+    - text: O Kafka sempre entrega na ordem global
+      why: Entre partições diferentes, não há ordem garantida.
+    - text: Ordenar pela hora de chegada no consumidor
+      why: Os eventos já chegam fora de ordem. O consumidor não tem como saber o que ainda vai chegar.
+  answer: 0
+  explanation: |
+    Kafka é um log distribuído: cada partição é uma sequência ordenada e imutável de eventos, e os consumidores leem guardando a posição, o offset. Os eventos ficam guardados por um tempo, e vários grupos de consumidores podem ler o mesmo tópico de forma independente.
+
+- slug: confirmar-offset-depois
+  title: O consumidor que reprocessa e não duplica
+  difficulty: dificil
+  kind: js
+  visual: fila
+  in: [message-brokers/Kafka, more-databases/Failure Modes]
+  study:
+    - { label: "Semântica de entrega (Kafka, em inglês)", url: "https://kafka.apache.org/documentation/#semantics" }
+  statement: |
+    O consumidor do Kafka recebe um lote de mensagens em ordem de offset. Ele só confirma o offset depois de processar, então, se cair, as mensagens voltam. Isso é entrega pelo menos uma vez, e uma mensagem pode chegar repetida.
+
+    Escreva `async function processarLote(mensagens, aplicar, processados)`. Cada mensagem é `{ offset, id, valor }`, e `processados` é um `Set` com os `id` já aplicados.
+
+    - mensagens com `id` já em `processados` são puladas, sem chamar `aplicar`
+    - para as outras, chame `aplicar(valor)` e acrescente o `id` em `processados`
+    - se `aplicar` falhar, pare na hora
+    - devolva o offset a confirmar: o offset da última mensagem tratada, pulada ou aplicada, mais 1. Se nenhuma foi tratada, devolva `null`
+  solution: |
+    async function processarLote(mensagens, aplicar, processados) {
+      let confirmar = null;
+      for (const m of mensagens) {
+        if (!processados.has(m.id)) {
+          try {
+            await aplicar(m.valor);
+          } catch {
+            break;
+          }
+          processados.add(m.id);
+        }
+        confirmar = m.offset + 1;
+      }
+      return confirmar;
+    }
+  tests:
+    - name: lote inteiro
+      code: |
+        const aplicados = [];
+        const r = await processarLote([{ offset: 10, id: 'a', valor: 1 }, { offset: 11, id: 'b', valor: 2 }], async (v) => aplicados.push(v), new Set());
+        expect(r).toBe(12);
+        expect(aplicados).toEqual([1, 2]);
+    - name: pula repetidas
+      code: |
+        const aplicar = fn(async () => {});
+        const vistos = new Set(['a']);
+        const r = await processarLote([{ offset: 5, id: 'a', valor: 1 }, { offset: 6, id: 'b', valor: 2 }], aplicar, vistos);
+        expect(r).toBe(7);
+        expect(aplicar).toHaveBeenCalledTimes(1);
+        expect(vistos.has('b')).toBe(true);
+    - name: para na falha
+      hidden: true
+      code: |
+        const vistos = new Set();
+        const aplicar = async (v) => { if (v === 2) throw new Error('banco fora'); };
+        const lote = [{ offset: 0, id: 'a', valor: 1 }, { offset: 1, id: 'b', valor: 2 }, { offset: 2, id: 'c', valor: 3 }];
+        expect(await processarLote(lote, aplicar, vistos)).toBe(1);
+        expect([...vistos]).toEqual(['a']);
+    - name: falha logo na primeira
+      hidden: true
+      code: |
+        const r = await processarLote([{ offset: 3, id: 'x', valor: 1 }], async () => { throw new Error('x'); }, new Set());
+        expect(r).toBe(null);
+        expect(await processarLote([], async () => {}, new Set())).toBe(null);
+  hints:
+    - Só atualize o offset a confirmar depois que a mensagem foi tratada.
+  explanation: |
+    Confirmar antes de processar perde mensagens quando o consumidor cai. Confirmar depois pode repetir mensagens, e por isso o consumidor guarda quais ids já aplicou. Essa combinação dá um efeito de exatamente uma vez sobre um transporte de pelo menos uma vez.
+  traps:
+    - reason: Confirma o lote inteiro mesmo com falha
+      code: |
+        async function processarLote(ms, aplicar, vistos) {
+          for (const m of ms) {
+            if (vistos.has(m.id)) continue;
+            try { await aplicar(m.valor); vistos.add(m.id); } catch { break; }
+          }
+          return ms.length ? ms[ms.length - 1].offset + 1 : null;
+        }
+    - reason: Aplica repetidas de novo
+      code: |
+        async function processarLote(ms, aplicar, vistos) {
+          let c = null;
+          for (const m of ms) {
+            try { await aplicar(m.valor); } catch { break; }
+            vistos.add(m.id);
+            c = m.offset + 1;
+          }
+          return c;
+        }
+
+- slug: camadas-do-docker
+  title: O build que baixa tudo de novo
+  difficulty: medio
+  kind: quiz
+  in: [containerization/Docker, ci-cd]
+  study:
+    - { label: "Cache de build (Docker, em inglês)", url: "https://docs.docker.com/build/cache/" }
+  statement: |
+    O Dockerfile da API faz `COPY . .` e depois `RUN npm ci`. Qualquer mudança num arquivo de código faz o build baixar todas as dependências de novo, e o CI leva 6 minutos.
+
+    Como reorganizar?
+  options:
+    - text: Copiar primeiro só package.json e package-lock.json, rodar npm ci, e só depois copiar o resto. A camada das dependências fica em cache enquanto o lockfile não muda
+      why: Certo. Cada instrução gera uma camada, e uma mudança invalida aquela camada e todas as seguintes.
+    - text: Desligar o cache do Docker
+      why: Isso deixa todo build lento, inclusive os que poderiam reaproveitar camadas.
+    - text: Rodar npm install dentro do container em execução
+      why: As dependências devem estar na imagem, para o container ser reproduzível.
+    - text: Juntar tudo numa instrução RUN gigante
+      why: Uma instrução só também invalida tudo a cada mudança.
+  answer: 0
+  explanation: |
+    Uma imagem Docker é uma pilha de camadas, e o build reaproveita as camadas que não mudaram. Ordene o Dockerfile do que muda menos para o que muda mais. Builds em múltiplos estágios deixam a imagem final só com o necessário para rodar.
+
+- slug: dados-do-container
+  title: O container reiniciou e os uploads sumiram
+  difficulty: facil
+  kind: quiz
+  in: [containerization/Docker]
+  study:
+    - { label: "Volumes (Docker, em inglês)", url: "https://docs.docker.com/engine/storage/volumes/" }
+  statement: |
+    A API grava as fotos enviadas pelos fãs em `/app/uploads`, dentro do container. Depois de um deploy, o container novo começou sem nenhuma foto.
+
+    Por quê?
+  options:
+    - text: O sistema de arquivos do container é descartado com ele. Dados que precisam sobreviver vão para um volume ou, melhor ainda, para um armazenamento externo, como um bucket
+      why: Certo. Containers devem ser descartáveis, e o estado fica fora deles.
+    - text: O Docker apaga fotos por segurança
+      why: Ele não distingue tipos de arquivo. Tudo que fica só na camada do container some com ele.
+    - text: Faltou dar permissão de escrita
+      why: As fotos foram gravadas. Elas sumiram quando o container foi substituído.
+    - text: Basta nunca reiniciar o container
+      why: Containers reiniciam em deploys, falhas e mudanças de máquina.
+  answer: 0
+  explanation: |
+    Um container é um processo isolado com um sistema de arquivos em camadas: as da imagem, somente leitura, e uma camada gravável que pertence àquele container. Volumes montam um armazenamento persistente. Com várias cópias da API, um armazenamento compartilhado, como S3, é o caminho comum.
+
+- slug: container-ou-maquina-virtual
+  title: Container não é uma máquina virtual pequena
+  difficulty: medio
+  kind: quiz
+  in: [containerization/Docker, containerization/LXC]
+  study:
+    - { label: "O que é um container (Docker)", url: "https://www.docker.com/resources/what-container/" }
+  statement: |
+    Qual é a diferença essencial entre um container e uma máquina virtual?
+  options:
+    - text: Containers compartilham o kernel do sistema hospedeiro e se isolam com recursos do próprio kernel, como namespaces e cgroups. Máquinas virtuais rodam um sistema operacional completo sobre um hipervisor
+      why: Certo. Por isso containers sobem em milissegundos e ocupam pouco, com isolamento menor que o de uma VM.
+    - text: Containers rodam sem sistema operacional nenhum
+      why: Eles usam o kernel do hospedeiro, que é parte do sistema operacional.
+    - text: Não há diferença, são nomes de marketing
+      why: A arquitetura é diferente, e isso muda desempenho e isolamento.
+    - text: Máquinas virtuais são sempre mais rápidas
+      why: VMs carregam um sistema inteiro e costumam subir mais devagar.
+  answer: 0
+  explanation: |
+    Namespaces isolam o que o processo enxerga, como processos, rede e arquivos. Cgroups limitam o que ele consome, como CPU e memória. LXC e Docker usam esses recursos do Linux, e por isso containers Linux precisam de um kernel Linux.
+
+- slug: lxc-container-de-sistema
+  title: Um container que parece um servidor
+  difficulty: medio
+  kind: quiz
+  in: [containerization/LXC]
+  study:
+    - { label: "Introdução ao LXC (Linux Containers, em inglês)", url: "https://linuxcontainers.org/lxc/introduction/" }
+  statement: |
+    A equipe de infraestrutura do local do show usa LXC para hospedar vários "servidores" leves numa máquina só, cada um com init, cron, SSH e vários serviços. O time da API usa Docker, com um processo por container.
+
+    Qual é a diferença de propósito?
+  options:
+    - text: LXC costuma rodar containers de sistema, que se comportam como uma máquina Linux inteira. Docker foca em containers de aplicação, um processo por container, empacotados em imagens
+      why: Certo. As duas ferramentas usam os mesmos recursos do kernel, com modelos de uso diferentes.
+    - text: LXC é uma máquina virtual
+      why: LXC usa namespaces e cgroups, sem hipervisor.
+    - text: Docker não usa recursos do kernel
+      why: Docker também se apoia em namespaces e cgroups.
+    - text: LXC só roda no Windows
+      why: LXC é uma tecnologia do Linux.
+  answer: 0
+  explanation: |
+    LXC é anterior ao Docker, e as primeiras versões do Docker o usavam por baixo. Hoje, LXC e Incus atendem quem quer containers parecidos com máquinas, e Docker e Kubernetes atendem quem empacota aplicações.
+
+- slug: prontidao-e-vivacidade
+  title: O pod que recebia pedidos antes da hora
+  difficulty: medio
+  kind: quiz
+  in: [containerization/Kubernetes]
+  study:
+    - { label: "Probes de liveness, readiness e startup (Kubernetes, em inglês)", url: "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/" }
+  statement: |
+    A API leva 20 segundos para aquecer o cache ao iniciar. No Kubernetes, os pods novos começam a receber tráfego na hora e respondem 503 nesse intervalo.
+
+    O que configurar?
+  options:
+    - text: 'Uma readiness probe, que só manda tráfego ao pod quando ele responde como pronto. A liveness probe é outra coisa: ela reinicia o pod que travou'
+      why: Certo. Readiness controla o tráfego, liveness controla o reinício.
+    - text: Uma liveness probe agressiva, que reinicia o pod enquanto ele não estiver pronto
+      why: O pod seria reiniciado sem parar e nunca terminaria de aquecer.
+    - text: Mais réplicas
+      why: As réplicas novas teriam o mesmo problema ao iniciar.
+    - text: Nada, 503 é normal
+      why: Com a probe certa, ninguém recebe esses erros.
+  answer: 0
+  explanation: |
+    O Kubernetes orquestra containers: mantém o número de réplicas pedido, substitui pods que falham e distribui o tráfego por meio de Services. As probes dizem a ele o estado real da aplicação. A startup probe protege aplicações lentas para iniciar da liveness.
+
+- slug: autoescala-horizontal
+  title: Quantas réplicas o festival precisa
+  difficulty: medio
+  kind: js
+  in: [containerization/Kubernetes, building-for-scale/Graceful Degradation]
+  study:
+    - { label: "Horizontal Pod Autoscaling (Kubernetes, em inglês)", url: "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/" }
+  statement: |
+    O autoscaler horizontal do Kubernetes calcula `ceil(atuais * usoAtual / usoAlvo)`. Escreva `replicasDesejadas({ atuais, usoAtual, usoAlvo, minimo, maximo })`:
+
+    - se a razão `usoAtual / usoAlvo` estiver a até 0,1 de 1, mantenha `atuais`, para não oscilar à toa
+    - senão, aplique a fórmula, arredondando para cima
+    - o resultado fica sempre entre `minimo` e `maximo`
+  solution: |
+    function replicasDesejadas({ atuais, usoAtual, usoAlvo, minimo, maximo }) {
+      const razao = usoAtual / usoAlvo;
+      const desejadas = Math.abs(razao - 1) <= 0.1 ? atuais : Math.ceil(atuais * razao);
+      return Math.min(maximo, Math.max(minimo, desejadas));
+    }
+  tests:
+    - name: escala para cima
+      code: |
+        expect(replicasDesejadas({ atuais: 4, usoAtual: 90, usoAlvo: 60, minimo: 2, maximo: 20 })).toBe(6);
+    - name: dentro da tolerância
+      code: |
+        expect(replicasDesejadas({ atuais: 4, usoAtual: 63, usoAlvo: 60, minimo: 2, maximo: 20 })).toBe(4);
+    - name: arredonda para cima
+      hidden: true
+      code: |
+        expect(replicasDesejadas({ atuais: 3, usoAtual: 70, usoAlvo: 50, minimo: 1, maximo: 20 })).toBe(5);
+    - name: escala para baixo
+      hidden: true
+      code: |
+        expect(replicasDesejadas({ atuais: 4, usoAtual: 30, usoAlvo: 60, minimo: 1, maximo: 20 })).toBe(2);
+    - name: limites
+      hidden: true
+      code: |
+        expect(replicasDesejadas({ atuais: 10, usoAtual: 300, usoAlvo: 50, minimo: 2, maximo: 20 })).toBe(20);
+        expect(replicasDesejadas({ atuais: 4, usoAtual: 1, usoAlvo: 60, minimo: 2, maximo: 20 })).toBe(2);
+  hints:
+    - "`Math.min(maximo, Math.max(minimo, x))` prende `x` entre os limites."
+  explanation: |
+    Escalar horizontalmente é acrescentar cópias em vez de máquinas maiores. A tolerância evita que pequenas variações criem e destruam pods o tempo todo. Na prática, o autoscaler também espera um tempo antes de reduzir, para não remover capacidade num vale passageiro.
+  traps:
+    - reason: Arredonda para o mais próximo
+      code: |
+        function replicasDesejadas({ atuais, usoAtual, usoAlvo, minimo, maximo }) {
+          const r = usoAtual / usoAlvo;
+          const d = Math.abs(r - 1) <= 0.1 ? atuais : Math.round(atuais * r);
+          return Math.min(maximo, Math.max(minimo, d));
+        }
+    - reason: Sem tolerância
+      code: |
+        function replicasDesejadas({ atuais, usoAtual, usoAlvo, minimo, maximo }) {
+          return Math.min(maximo, Math.max(minimo, Math.ceil(atuais * usoAtual / usoAlvo)));
+        }
+
+- slug: websocket-ou-sse
+  title: O chat do show ao vivo
+  difficulty: medio
+  kind: quiz
+  in: [real-time/WebSockets, real-time/Server Sent Events]
+  study:
+    - { label: "API de WebSocket (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/API/WebSockets_API" }
+  statement: |
+    A transmissão do festival vai ter um placar ao vivo, só do servidor para os fãs, e um chat, em que os fãs mandam e recebem mensagens o tempo todo.
+
+    Qual escolha combina com cada um?
+  options:
+    - text: Server-Sent Events para o placar, que só vai do servidor para o cliente e reconecta sozinho. WebSocket para o chat, que precisa de mensagens nos dois sentidos pela mesma conexão
+      why: Certo. SSE é mais simples quando o fluxo é de mão única. WebSocket é bidirecional.
+    - text: WebSocket não funciona em navegadores
+      why: Todos os navegadores modernos suportam WebSocket.
+    - text: SSE para o chat, porque é bidirecional
+      why: SSE só envia do servidor para o cliente. O cliente responde com pedidos HTTP comuns.
+    - text: Consultar o servidor a cada segundo para os dois
+      why: Polling frequente gasta muito mais recursos e ainda tem atraso.
+  answer: 0
+  explanation: |
+    WebSocket começa como um pedido HTTP e é promovido a um canal bidirecional persistente. Ele não tem reconexão automática nem funciona bem com caches e alguns proxies. SSE usa HTTP comum e reconecta sozinho. Os dois mantêm uma conexão aberta por cliente, o que muda o dimensionamento do servidor.
+
+- slug: reconectar-com-espera
+  title: Cem mil fãs reconectando juntos
+  difficulty: medio
+  kind: js
+  in: [real-time/WebSockets, building-for-scale/Backpressure]
+  study:
+    - { label: "Exponential backoff and jitter (AWS, em inglês)", url: "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" }
+  statement: |
+    O servidor de WebSocket reiniciou, e cem mil clientes tentaram reconectar no mesmo segundo, derrubando-o de novo. Escreva `atrasoDeReconexao(tentativa, { base, maximo }, aleatorio = Math.random)`, o tempo de espera em milissegundos antes da tentativa de número `tentativa`, começando em 0:
+
+    - o teto da espera dobra a cada tentativa: `base * 2 ** tentativa`, mas nunca passa de `maximo`
+    - a espera é um valor sorteado entre 0 e o teto, o full jitter: `Math.floor(aleatorio() * teto)`
+  solution: |
+    function atrasoDeReconexao(tentativa, { base, maximo }, aleatorio = Math.random) {
+      const teto = Math.min(maximo, base * 2 ** tentativa);
+      return Math.floor(aleatorio() * teto);
+    }
+  tests:
+    - name: dobra a cada tentativa
+      code: |
+        const metade = () => 0.5;
+        expect(atrasoDeReconexao(0, { base: 1000, maximo: 30000 }, metade)).toBe(500);
+        expect(atrasoDeReconexao(3, { base: 1000, maximo: 30000 }, metade)).toBe(4000);
+    - name: respeita o máximo
+      code: |
+        expect(atrasoDeReconexao(10, { base: 1000, maximo: 30000 }, () => 0.5)).toBe(15000);
+    - name: sorteio inteiro
+      hidden: true
+      code: |
+        expect(atrasoDeReconexao(1, { base: 1000, maximo: 30000 }, () => 0.9999)).toBe(1999);
+        expect(atrasoDeReconexao(1, { base: 1000, maximo: 30000 }, () => 0)).toBe(0);
+    - name: tentativas enormes
+      hidden: true
+      code: |
+        expect(atrasoDeReconexao(5000, { base: 1000, maximo: 30000 }, () => 0.5)).toBe(15000);
+    - name: usa Math.random por padrão
+      hidden: true
+      code: |
+        const valores = new Set(Array.from({ length: 50 }, () => atrasoDeReconexao(4, { base: 1000, maximo: 30000 })));
+        expect(valores.size).toBeGreaterThan(5);
+        for (const v of valores) expect(v).toBeLessThan(16000);
+  hints:
+    - "`2 ** 5000` dá `Infinity`, e `Math.min` resolve."
+  explanation: |
+    A espera exponencial alivia o servidor, e o sorteio espalha os clientes no tempo, para eles não voltarem em ondas sincronizadas. Sem o jitter, todos que caíram juntos reconectam juntos, de novo e de novo.
+  traps:
+    - reason: Sem sorteio, todos voltam juntos
+      code: |
+        function atrasoDeReconexao(t, { base, maximo }) {
+          return Math.min(maximo, base * 2 ** t);
+        }
+    - reason: Sem o máximo
+      code: |
+        function atrasoDeReconexao(t, { base }, aleatorio = Math.random) {
+          return Math.floor(aleatorio() * base * 2 ** t);
+        }
+
+- slug: polling-curto-ou-longo
+  title: Perguntar toda hora ou esperar a resposta
+  difficulty: facil
+  kind: quiz
+  in: [real-time/Long / Short Polling]
+  study:
+    - { label: "Long polling (javascript.info, em inglês)", url: "https://javascript.info/long-polling" }
+  statement: |
+    O app consulta `GET /fila-virtual/posicao` a cada 2 segundos. Com 200 mil pessoas na fila, são 100 mil pedidos por segundo, quase todos com a mesma resposta.
+
+    Como o long polling muda isso?
+  options:
+    - text: O servidor segura o pedido aberto até haver novidade, ou até um tempo limite, e só então responde. O cliente manda outro pedido logo em seguida. Pedidos sem novidade quase somem
+      why: Certo. É tempo real com HTTP comum, útil quando WebSocket ou SSE não estão disponíveis.
+    - text: O cliente consulta a cada 100 ms para ficar mais rápido
+      why: Isso é short polling mais agressivo, com ainda mais pedidos inúteis.
+    - text: O servidor manda a resposta antes de o cliente perguntar
+      why: Isso seria push, como SSE ou WebSocket. No long polling, o cliente sempre pergunta primeiro.
+    - text: Não muda nada, é o mesmo que short polling
+      why: A diferença está em segurar a resposta até haver algo novo.
+  answer: 0
+  explanation: |
+    Short polling é simples, mas gasta recursos com respostas repetidas e tem atraso de até um intervalo. Long polling responde assim que algo muda, ao custo de manter conexões abertas no servidor. SSE e WebSocket são as alternativas modernas.
+
+- slug: canal-de-long-polling
+  title: O servidor que segura a resposta
+  difficulty: dificil
+  kind: js
+  in: [real-time/Long / Short Polling, backend-language/JavaScript]
+  study:
+    - { label: "Long polling (javascript.info, em inglês)", url: "https://javascript.info/long-polling" }
+  statement: |
+    Escreva `criarCanal()`, que devolve `{ publicar, esperar }`:
+
+    - `publicar(dado)` guarda o evento `{ id, dado }`, com `id` sequencial começando em 1, e devolve o `id`
+    - `esperar(desde, prazo)` devolve uma promessa com os eventos de `id` maior que `desde`
+    - se já houver eventos novos, a promessa resolve na hora
+    - se não houver, ela espera: resolve assim que algo for publicado, ou resolve com `[]` depois de `prazo` milissegundos
+    - todos os pedidos esperando são avisados de uma publicação
+  solution: |
+    function criarCanal() {
+      const eventos = [];
+      let esperando = [];
+      const depois = (desde) => eventos.filter((e) => e.id > desde);
+      return {
+        publicar(dado) {
+          const evento = { id: eventos.length + 1, dado };
+          eventos.push(evento);
+          const avisar = esperando;
+          esperando = [];
+          for (const pedido of avisar) pedido();
+          return evento.id;
+        },
+        esperar(desde, prazo) {
+          if (depois(desde).length) return Promise.resolve(depois(desde));
+          return new Promise((resolve) => {
+            const pedido = () => {
+              clearTimeout(timer);
+              resolve(depois(desde));
+            };
+            const timer = setTimeout(() => {
+              esperando = esperando.filter((p) => p !== pedido);
+              resolve([]);
+            }, prazo);
+            esperando.push(pedido);
+          });
+        },
+      };
+    }
+  tests:
+    - name: eventos já existentes
+      code: |
+        const canal = criarCanal();
+        canal.publicar('portões abertos');
+        expect(await canal.esperar(0, 1000)).toEqual([{ id: 1, dado: 'portões abertos' }]);
+    - name: espera pela publicação
+      code: |
+        const canal = criarCanal();
+        const inicio = Date.now();
+        setTimeout(() => canal.publicar('fila andou'), 30);
+        expect(await canal.esperar(0, 2000)).toEqual([{ id: 1, dado: 'fila andou' }]);
+        expect(Date.now() - inicio).toBeLessThan(500);
+    - name: prazo esgotado
+      hidden: true
+      code: |
+        const canal = criarCanal();
+        const inicio = Date.now();
+        expect(await canal.esperar(0, 60)).toEqual([]);
+        expect(Date.now() - inicio).toBeGreaterThanOrEqual(50);
+    - name: só os eventos depois de desde
+      hidden: true
+      code: |
+        const canal = criarCanal();
+        canal.publicar('a');
+        canal.publicar('b');
+        expect((await canal.esperar(1, 100)).map((e) => e.dado)).toEqual(['b']);
+    - name: avisa todos que esperam
+      hidden: true
+      code: |
+        const canal = criarCanal();
+        setTimeout(() => canal.publicar('x'), 20);
+        const respostas = await Promise.all([canal.esperar(0, 1000), canal.esperar(0, 1000), canal.esperar(0, 1000)]);
+        expect(respostas.map((r) => r.length)).toEqual([1, 1, 1]);
+  hints:
+    - Guarde, para cada pedido esperando, uma função que resolve a promessa dele.
+    - Ao resolver pela publicação, cancele o `setTimeout` do prazo.
+  explanation: |
+    No long polling, o servidor guarda os pedidos pendentes e os responde quando há novidade. O `desde` permite ao cliente pedir só o que perdeu entre um pedido e outro. Com vários servidores, os eventos ficam num lugar compartilhado, como Redis, e cada servidor avisa os próprios pedidos.
+  traps:
+    - reason: Avisa só o primeiro que espera
+      code: |
+        function criarCanal() {
+          const ev = []; let fila = [];
+          const dep = (d) => ev.filter((e) => e.id > d);
+          return {
+            publicar(dado) { ev.push({ id: ev.length + 1, dado }); const p = fila.shift(); if (p) p(); return ev.length; },
+            esperar(d, prazo) {
+              if (dep(d).length) return Promise.resolve(dep(d));
+              return new Promise((r) => { const t = setTimeout(() => r([]), prazo); fila.push(() => { clearTimeout(t); r(dep(d)); }); });
+            },
+          };
+        }
+    - reason: Devolve todos os eventos, ignorando desde
+      code: |
+        function criarCanal() {
+          const ev = []; let fila = [];
+          return {
+            publicar(dado) { ev.push({ id: ev.length + 1, dado }); const f = fila; fila = []; f.forEach((p) => p()); return ev.length; },
+            esperar(d, prazo) {
+              if (ev.length > d) return Promise.resolve([...ev]);
+              return new Promise((r) => { const t = setTimeout(() => r([]), prazo); fila.push(() => { clearTimeout(t); r([...ev]); }); });
+            },
+          };
+        }
+
+- slug: balde-de-fichas
+  title: Limite de pedidos por cliente
+  difficulty: dificil
+  kind: js
+  in: [building-for-scale/Throttling]
+  visual: balde
+  study:
+    - { label: "Token bucket (Wikipédia, em inglês)", url: "https://en.wikipedia.org/wiki/Token_bucket" }
+  statement: |
+    A API de pré-venda limita cada cliente com um balde de fichas. O balde começa cheio, com `capacidade` fichas, e ganha `porSegundo` fichas por segundo, de forma contínua, sem passar da capacidade. Cada pedido gasta uma ficha. Sem ficha inteira disponível, o pedido é recusado.
+
+    Escreva `criarBalde({ capacidade, porSegundo })`, que devolve `permitir(agora)`. `agora` é o horário em milissegundos, e devolve `true` ou `false`.
+  solution: |
+    function criarBalde({ capacidade, porSegundo }) {
+      let fichas = capacidade;
+      let ultimo = null;
+      return function permitir(agora) {
+        if (ultimo !== null) fichas = Math.min(capacidade, fichas + ((agora - ultimo) / 1000) * porSegundo);
+        ultimo = agora;
+        if (fichas >= 1) {
+          fichas -= 1;
+          return true;
+        }
+        return false;
+      };
+    }
+  tests:
+    - name: rajada até a capacidade
+      code: |
+        const permitir = criarBalde({ capacidade: 3, porSegundo: 1 });
+        expect([permitir(0), permitir(0), permitir(0), permitir(0)]).toEqual([true, true, true, false]);
+    - name: reabastece com o tempo
+      code: |
+        const permitir = criarBalde({ capacidade: 3, porSegundo: 1 });
+        permitir(0); permitir(0); permitir(0);
+        expect(permitir(1000)).toBe(true);
+        expect(permitir(1000)).toBe(false);
+    - name: não passa da capacidade
+      hidden: true
+      code: |
+        const permitir = criarBalde({ capacidade: 2, porSegundo: 1 });
+        permitir(0);
+        const r = [permitir(60000), permitir(60000), permitir(60000)];
+        expect(r).toEqual([true, true, false]);
+    - name: frações de ficha
+      hidden: true
+      code: |
+        const permitir = criarBalde({ capacidade: 1, porSegundo: 2 });
+        expect(permitir(0)).toBe(true);
+        expect(permitir(250)).toBe(false);
+        expect(permitir(500)).toBe(true);
+  hints:
+    - A cada chamada, acrescente as fichas ganhas desde a chamada anterior, e só então confira.
+    - Recusar também conta como chamada para o reabastecimento.
+  explanation: |
+    O balde de fichas permite rajadas curtas, até a capacidade, e limita a taxa média. Janelas fixas, como "100 por minuto", deixam passar o dobro na virada do minuto. Num cluster, o balde fica num lugar compartilhado, como o Redis, e a API responde `429 Too Many Requests` com `Retry-After`.
+  traps:
+    - reason: Enche o balde inteiro a cada segundo
+      code: |
+        function criarBalde({ capacidade }) {
+          let fichas = capacidade; let janela = 0;
+          return (agora) => {
+            const j = Math.floor(agora / 1000);
+            if (j !== janela) { janela = j; fichas = capacidade; }
+            if (fichas >= 1) { fichas--; return true; }
+            return false;
+          };
+        }
+    - reason: Sem limite de capacidade
+      code: |
+        function criarBalde({ capacidade, porSegundo }) {
+          let f = capacidade; let u = null;
+          return (agora) => {
+            if (u !== null) f += ((agora - u) / 1000) * porSegundo;
+            u = agora;
+            if (f >= 1) { f--; return true; }
+            return false;
+          };
+        }
+
+- slug: responder-429
+  title: O parceiro que martela a API
+  difficulty: facil
+  kind: quiz
+  visual: balde
+  in: [building-for-scale/Throttling, apis/REST]
+  study:
+    - { label: "429 Too Many Requests (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429" }
+  statement: |
+    Um parceiro de revenda passou a fazer 5 mil pedidos por segundo à API de disponibilidade, e o limite combinado é 50. Como a API deve responder aos pedidos que passam do limite?
+  options:
+    - text: Com 429 Too Many Requests e o cabeçalho Retry-After, dizendo quando tentar de novo, sem gastar recursos com o processamento
+      why: Certo. O cliente bem-feito entende o status e espera.
+    - text: Com 500, para assustar o parceiro
+      why: 500 indica erro do servidor, e muitos clientes tentam de novo imediatamente.
+    - text: Processar todos, mais devagar
+      why: Os pedidos se acumulam e afetam os outros clientes.
+    - text: Bloquear o parceiro para sempre na primeira vez
+      why: É desproporcional. O limite existe para proteger a API, não para punir.
+  answer: 0
+  explanation: |
+    Limitar a taxa protege a API de abusos e de clientes com defeito, e distribui a capacidade de forma justa. Limites por chave de API, por usuário ou por IP são comuns, e devem ser documentados junto com os cabeçalhos que informam o consumo.
+
+- slug: tarefas-com-limite
+  title: Duzentos e-mails, cinco de cada vez
+  difficulty: dificil
+  kind: js
+  in: [building-for-scale/Backpressure, backend-language/JavaScript]
+  study:
+    - { label: "Promise.all (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/JavaScript/Reference/Global_Objects/Promise/all" }
+  statement: |
+    O provedor de e-mail aceita no máximo 5 envios simultâneos. Disparar os 200 de uma vez derruba as conexões.
+
+    Escreva `async function comLimite(itens, limite, tarefa)`, que chama `tarefa(item)` para cada item, com no máximo `limite` tarefas em andamento ao mesmo tempo, e devolve os resultados na ordem dos itens. Assim que uma tarefa termina, a próxima começa, sem esperar o grupo todo.
+  solution: |
+    async function comLimite(itens, limite, tarefa) {
+      const resultados = new Array(itens.length);
+      let proximo = 0;
+      async function trabalhador() {
+        while (proximo < itens.length) {
+          const i = proximo++;
+          resultados[i] = await tarefa(itens[i]);
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, trabalhador));
+      return resultados;
+    }
+  tests:
+    - name: resultados em ordem
+      code: |
+        const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+        const r = await comLimite([30, 10, 20], 2, async (ms) => { await espera(ms); return ms * 2; });
+        expect(r).toEqual([60, 20, 40]);
+    - name: nunca passa do limite
+      code: |
+        let ativas = 0, pico = 0;
+        await comLimite(Array.from({ length: 12 }, (_, i) => i), 3, async () => {
+          ativas++; pico = Math.max(pico, ativas);
+          await new Promise((r) => setTimeout(r, 10));
+          ativas--;
+        });
+        expect(pico).toBe(3);
+    - name: lista vazia
+      hidden: true
+      code: |
+        expect(await comLimite([], 4, async () => 1)).toEqual([]);
+    - name: não espera o grupo todo
+      hidden: true
+      code: |
+        const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+        const inicio = Date.now();
+        await comLimite([300, 50, 50, 50, 50, 50], 2, espera);
+        expect(Date.now() - inicio).toBeLessThan(370);
+  hints:
+    - Crie `limite` trabalhadores. Cada um pega o próximo item da lista até ela acabar.
+    - Como o JavaScript roda um trecho de cada vez, `proximo++` não tem corrida entre os trabalhadores.
+  explanation: |
+    Contrapressão é o consumidor controlar o ritmo do produtor, em vez de aceitar tudo e estourar. Limitar a concorrência protege o serviço chamado e a própria memória. Filas com tamanho máximo e respostas 429 ou 503 são a mesma ideia entre serviços.
+  traps:
+    - reason: Dispara tudo de uma vez
+      code: |
+        async function comLimite(itens, limite, tarefa) {
+          return Promise.all(itens.map((i) => tarefa(i)));
+        }
+    - reason: Espera o grupo todo terminar
+      code: |
+        async function comLimite(itens, limite, tarefa) {
+          const r = [];
+          for (let i = 0; i < itens.length; i += limite) r.push(...(await Promise.all(itens.slice(i, i + limite).map((x) => tarefa(x)))));
+          return r;
+        }
+
+- slug: fila-sem-limite
+  title: A memória que cresce até cair
+  difficulty: medio
+  kind: quiz
+  in: [building-for-scale/Backpressure, message-brokers/RabbitMQ]
+  study:
+    - { label: "Contrapressão em streams (Node.js, em inglês)", url: "https://nodejs.org/en/learn/modules/backpressuring-in-streams" }
+  statement: |
+    Os leitores dos portões mandam check-ins mais rápido do que o serviço consegue gravar. O serviço guarda o excesso numa lista em memória, que cresceu até o processo morrer, e perdeu tudo que estava nela.
+
+    Qual abordagem aplica contrapressão?
+  options:
+    - text: Uma fila com tamanho máximo. Quando enche, o serviço responde que está ocupado, e os leitores guardam localmente e tentam depois, mais devagar
+      why: Certo. A pressão volta para quem produz, em vez de virar memória acumulada.
+    - text: Aumentar a memória do servidor
+      why: Adia a queda. Se a produção continua maior que o consumo, a fila sempre cresce.
+    - text: Descartar os check-ins mais antigos sem avisar ninguém
+      why: Perder dados em silêncio é pior que recusar e deixar o produtor tentar de novo.
+    - text: Fazer os leitores mandarem mais rápido
+      why: Isso aumenta o desequilíbrio.
+  answer: 0
+  explanation: |
+    Todo sistema tem um gargalo. Sem contrapressão, o excesso vira fila, latência e, no fim, falta de memória. Com ela, o produtor desacelera, guarda ou descarta de forma consciente. Streams do Node.js, filas com limite e respostas 503 são formas de aplicar isso.
+
+- slug: deslocar-a-carga
+  title: O relatório na hora da abertura das vendas
+  difficulty: medio
+  kind: quiz
+  visual: fila
+  in: [building-for-scale/Loadshifting]
+  study:
+    - { label: "Queue-based load leveling (Microsoft)", url: "https://learn.microsoft.com/pt-br/azure/architecture/patterns/queue-based-load-leveling" }
+  statement: |
+    Na abertura das vendas, a API recebe 50 vezes a carga normal. Ao mesmo tempo, ela gera o PDF do ingresso, manda e-mail e atualiza relatórios para cada compra, tudo dentro do pedido.
+
+    Como deslocar a carga?
+  options:
+    - text: Concluir a compra no pedido e mandar PDF, e-mail e relatórios para uma fila, processada por workers no ritmo que aguentam. Relatórios pesados vão para a madrugada
+      why: Certo. O pico de trabalho imediato diminui, e o trabalho adiável é espalhado no tempo.
+    - text: Fazer tudo dentro do pedido, só que com um servidor maior
+      why: O pico é curto e enorme. Dimensionar tudo para ele é caro, e o pedido continua lento.
+    - text: Proibir compras na abertura
+      why: A abertura é exatamente quando as pessoas querem comprar.
+    - text: Gerar os PDFs antes de alguém comprar
+      why: O PDF depende do comprador e do assento, conhecidos só na compra.
+  answer: 0
+  explanation: |
+    Deslocar a carga é tirar do pico o que pode esperar: tarefas assíncronas por fila, trabalho em lote fora do horário de pico e pré-cálculo do que não depende do pedido. A fila também absorve os picos, e os workers seguem num ritmo estável.
+
+- slug: trabalho-agendado-fora-do-pico
+  title: A reindexação de toda noite
+  difficulty: facil
+  kind: quiz
+  in: [building-for-scale/Loadshifting, search-engines/Elasticsearch]
+  study:
+    - { label: "Queue-based load leveling (Microsoft)", url: "https://learn.microsoft.com/pt-br/azure/architecture/patterns/queue-based-load-leveling" }
+  statement: |
+    A reindexação completa da busca leva 40 minutos e consome metade do banco. Ela roda às 19h, horário em que mais gente compra.
+
+    Qual mudança aplica o deslocamento de carga?
+  options:
+    - text: Agendar a reindexação para o horário de menor movimento, como a madrugada, e manter as atualizações pequenas ao longo do dia
+      why: Certo. Trabalho pesado e adiável vai para quando há capacidade sobrando.
+    - text: Rodar a reindexação a cada hora
+      why: Isso multiplica a carga pesada ao longo do dia.
+    - text: Desligar a busca às 19h
+      why: Desliga um recurso importante no horário em que ele mais é usado.
+    - text: Manter às 19h e torcer
+      why: A disputa pelo banco continua afetando as compras.
+  answer: 0
+  explanation: |
+    Muitos sistemas têm ciclos diários previsíveis. Jobs em lote, backups, reindexações e relatórios pesados devem rodar nos vales. Em nuvem, horários de menor carga às vezes também custam menos.
+
+- slug: disjuntor
+  title: O antifraude fora do ar
+  difficulty: dificil
+  kind: js
+  in: [building-for-scale/Circuit Breaker]
+  visual: disjuntor
+  study:
+    - { label: "CircuitBreaker (Martin Fowler, em inglês)", url: "https://martinfowler.com/bliki/CircuitBreaker.html" }
+  statement: |
+    Quando o antifraude cai, cada compra espera 10 segundos até falhar, e as conexões da API se esgotam. Escreva `criarDisjuntor(chamada, { limite, espera, relogio })`, que devolve `{ executar, estado }`:
+
+    - `fechado`: `executar(...args)` chama `chamada(...args)`. Depois de `limite` falhas seguidas, o disjuntor abre
+    - `aberto`: `executar` rejeita na hora com um erro cuja mensagem contém `circuito aberto`, sem chamar `chamada`
+    - passados `espera` milissegundos desde a abertura, a próxima chamada é um teste, `meio-aberto`: sucesso fecha o disjuntor, falha abre de novo
+    - um sucesso zera a contagem de falhas
+    - `relogio()` devolve o horário em milissegundos, e `estado()` devolve `'fechado'`, `'aberto'` ou `'meio-aberto'`
+  solution: |
+    function criarDisjuntor(chamada, { limite, espera, relogio }) {
+      let estado = 'fechado';
+      let falhas = 0;
+      let abertoEm = 0;
+      async function executar(...args) {
+        if (estado === 'aberto') {
+          if (relogio() - abertoEm < espera) throw new Error('circuito aberto');
+          estado = 'meio-aberto';
+        }
+        try {
+          const resultado = await chamada(...args);
+          estado = 'fechado';
+          falhas = 0;
+          return resultado;
+        } catch (erro) {
+          falhas++;
+          if (estado === 'meio-aberto' || falhas >= limite) {
+            estado = 'aberto';
+            abertoEm = relogio();
+          }
+          throw erro;
+        }
+      }
+      return { executar, estado: () => estado };
+    }
+  tests:
+    - name: abre depois do limite
+      code: |
+        let agora = 0;
+        const chamada = fn(async () => { throw new Error('timeout'); });
+        const d = criarDisjuntor(chamada, { limite: 3, espera: 1000, relogio: () => agora });
+        for (let i = 0; i < 3; i++) await d.executar().catch(() => {});
+        expect(d.estado()).toBe('aberto');
+        await expect(d.executar()).rejects.toMatch('circuito aberto');
+        expect(chamada).toHaveBeenCalledTimes(3);
+    - name: sucesso repassa o resultado
+      code: |
+        const d = criarDisjuntor(async (x) => x * 2, { limite: 3, espera: 1000, relogio: () => 0 });
+        expect(await d.executar(21)).toBe(42);
+        expect(d.estado()).toBe('fechado');
+    - name: teste depois da espera fecha
+      hidden: true
+      code: |
+        let agora = 0; let falhar = true;
+        const d = criarDisjuntor(async () => { if (falhar) throw new Error('x'); return 'ok'; }, { limite: 2, espera: 1000, relogio: () => agora });
+        await d.executar().catch(() => {}); await d.executar().catch(() => {});
+        agora = 999;
+        await expect(d.executar()).rejects.toMatch('circuito aberto');
+        agora = 1000; falhar = false;
+        expect(await d.executar()).toBe('ok');
+        expect(d.estado()).toBe('fechado');
+    - name: teste que falha abre de novo
+      hidden: true
+      code: |
+        let agora = 0;
+        const chamada = fn(async () => { throw new Error('x'); });
+        const d = criarDisjuntor(chamada, { limite: 2, espera: 1000, relogio: () => agora });
+        await d.executar().catch(() => {}); await d.executar().catch(() => {});
+        agora = 1500;
+        await d.executar().catch(() => {});
+        expect(d.estado()).toBe('aberto');
+        agora = 2000;
+        await expect(d.executar()).rejects.toMatch('circuito aberto');
+        expect(chamada).toHaveBeenCalledTimes(3);
+    - name: só falhas seguidas contam
+      hidden: true
+      code: |
+        let n = 0;
+        const d = criarDisjuntor(async () => { if (++n % 2) throw new Error('x'); return 'ok'; }, { limite: 2, espera: 1000, relogio: () => 0 });
+        for (let i = 0; i < 6; i++) await d.executar().catch(() => {});
+        expect(d.estado()).toBe('fechado');
+  hints:
+    - Guarde o estado, o número de falhas seguidas e o horário em que abriu.
+    - No estado meio-aberto, uma falha só já basta para abrir de novo.
+  explanation: |
+    O disjuntor falha rápido quando a dependência está fora, poupando recursos e dando tempo para ela se recuperar. Combinado com uma alternativa, como aprovar compras pequenas sem antifraude e revisar depois, ele vira degradação graciosa.
+  traps:
+    - reason: Nunca testa de novo
+      code: |
+        function criarDisjuntor(chamada, { limite }) {
+          let estado = 'fechado', f = 0;
+          return {
+            estado: () => estado,
+            async executar(...a) {
+              if (estado === 'aberto') throw new Error('circuito aberto');
+              try { const r = await chamada(...a); f = 0; return r; } catch (e) { if (++f >= limite) estado = 'aberto'; throw e; }
+            },
+          };
+        }
+    - reason: Conta falhas não seguidas
+      code: |
+        function criarDisjuntor(chamada, { limite, espera, relogio }) {
+          let estado = 'fechado', f = 0, em = 0;
+          return {
+            estado: () => estado,
+            async executar(...a) {
+              if (estado === 'aberto') { if (relogio() - em < espera) throw new Error('circuito aberto'); estado = 'meio-aberto'; }
+              try { const r = await chamada(...a); estado = 'fechado'; return r; }
+              catch (e) { f++; if (estado === 'meio-aberto' || f >= limite) { estado = 'aberto'; em = relogio(); } throw e; }
+            },
+          };
+        }
+
+- slug: falhar-rapido
+  title: Por que desistir de propósito
+  difficulty: medio
+  kind: quiz
+  in: [building-for-scale/Circuit Breaker, building-for-scale/Graceful Degradation]
+  visual: disjuntor
+  study:
+    - { label: "Circuit breaker (Microsoft)", url: "https://learn.microsoft.com/pt-br/azure/architecture/patterns/circuit-breaker" }
+  statement: |
+    Um colega acha estranho o disjuntor recusar chamadas sem nem tentar: "e se o serviço já voltou?". Qual é o argumento a favor?
+  options:
+    - text: Enquanto o serviço está caído, cada tentativa prende uma conexão até o tempo limite e aumenta a carga sobre quem tenta se recuperar. Falhar rápido libera a API, e o teste periódico percebe a volta
+      why: Certo. O estado meio-aberto existe justamente para descobrir que o serviço voltou.
+    - text: O disjuntor deixa o sistema mais lento de propósito
+      why: Ele torna as falhas mais rápidas, e o sistema mais responsivo.
+    - text: Ele garante que o serviço nunca caia
+      why: Ele não evita a queda, só limita o estrago dela.
+    - text: Não há vantagem, retentativas infinitas são melhores
+      why: Retentativas sem limite multiplicam a carga num serviço já sobrecarregado.
+  answer: 0
+  explanation: |
+    Falhas em cascata acontecem quando um serviço lento prende os recursos de quem o chama, que também fica lento, e assim por diante. Disjuntores, tempos limite e filas com limite cortam essa corrente.
+
+- slug: medir-a-duracao
+  title: Quanto tempo leva cada consulta
+  difficulty: medio
+  kind: js
+  in: [building-for-scale/Instrumentation]
+  study:
+    - { label: "Instrumentação (OpenTelemetry)", url: "https://opentelemetry.io/pt/docs/concepts/instrumentation/" }
+  statement: |
+    Escreva `medir(nome, funcao, registrar, relogio)`, que devolve uma versão instrumentada de `funcao`, uma função assíncrona:
+
+    - a versão nova recebe os mesmos argumentos, chama `funcao` e devolve o mesmo resultado
+    - ao terminar, com sucesso ou com erro, chama `registrar({ nome, ms, ok })`, com a duração medida por `relogio()`, em milissegundos
+    - se `funcao` falhar, o erro continua sendo lançado para quem chamou
+  solution: |
+    function medir(nome, funcao, registrar, relogio) {
+      return async function (...args) {
+        const inicio = relogio();
+        try {
+          const resultado = await funcao(...args);
+          registrar({ nome, ms: relogio() - inicio, ok: true });
+          return resultado;
+        } catch (erro) {
+          registrar({ nome, ms: relogio() - inicio, ok: false });
+          throw erro;
+        }
+      };
+    }
+  tests:
+    - name: sucesso
+      code: |
+        let agora = 100;
+        const registros = [];
+        const buscar = medir('buscarShow', async (id) => { agora += 25; return { id }; }, (r) => registros.push(r), () => agora);
+        expect(await buscar(7)).toEqual({ id: 7 });
+        expect(registros).toEqual([{ nome: 'buscarShow', ms: 25, ok: true }]);
+    - name: falha
+      code: |
+        let agora = 0;
+        const registros = [];
+        const f = medir('pagar', async () => { agora += 40; throw new Error('recusado'); }, (r) => registros.push(r), () => agora);
+        await expect(f()).rejects.toMatch('recusado');
+        expect(registros).toEqual([{ nome: 'pagar', ms: 40, ok: false }]);
+    - name: vários argumentos
+      hidden: true
+      code: |
+        const f = medir('somar', async (a, b, c) => a + b + c, () => {}, () => 0);
+        expect(await f(1, 2, 3)).toBe(6);
+    - name: um registro por chamada
+      hidden: true
+      code: |
+        const registrar = fn(() => {});
+        const f = medir('x', async () => 1, registrar, () => 0);
+        await f(); await f();
+        expect(registrar).toHaveBeenCalledTimes(2);
+  hints:
+    - Use `try` e `catch`, registrando nos dois caminhos, e relance o erro no `catch`.
+  explanation: |
+    Instrumentar é fazer o código emitir dados sobre o próprio funcionamento: durações, contagens, erros. Medir falhas é tão importante quanto medir sucessos, porque é nelas que as perguntas aparecem. Bibliotecas como OpenTelemetry instrumentam frameworks e drivers automaticamente.
+  traps:
+    - reason: Não registra as falhas
+      code: |
+        function medir(nome, funcao, registrar, relogio) {
+          return async (...a) => { const i = relogio(); const r = await funcao(...a); registrar({ nome, ms: relogio() - i, ok: true }); return r; };
+        }
+    - reason: Engole o erro
+      code: |
+        function medir(nome, funcao, registrar, relogio) {
+          return async (...a) => {
+            const i = relogio();
+            try { const r = await funcao(...a); registrar({ nome, ms: relogio() - i, ok: true }); return r; }
+            catch { registrar({ nome, ms: relogio() - i, ok: false }); return undefined; }
+          };
+        }
+
+- slug: logs-estruturados
+  title: Achar um pedido no meio de um milhão de linhas
+  difficulty: medio
+  kind: quiz
+  in: [building-for-scale/Instrumentation, building-for-scale/Telemetry]
+  study:
+    - { label: "Logs (OpenTelemetry, em inglês)", url: "https://opentelemetry.io/docs/concepts/signals/logs/" }
+  statement: |
+    Uma fã reclama que a compra falhou às 19h03. Os logs são frases soltas, como `Erro ao processar pagamento`, sem nada que ligue as linhas do mesmo pedido, espalhadas por quatro serviços.
+
+    O que teria tornado isso fácil?
+  options:
+    - text: Logs estruturados, em JSON com campos como nível, rota e id do pedido, e um id de correlação gerado na entrada e repassado a todos os serviços
+      why: Certo. Com campos, a busca filtra exatamente as linhas daquele pedido em todos os serviços.
+    - text: Mais logs, com mais frases
+      why: Volume sem estrutura dificulta ainda mais a busca.
+    - text: Guardar os logs só na memória
+      why: Eles somem quando o processo reinicia, que é quando mais se precisa deles.
+    - text: Registrar os dados do cartão para facilitar a investigação
+      why: Dados sensíveis nunca devem ir para logs.
+  answer: 0
+  explanation: |
+    Logs estruturados são lidos por máquinas: dá para filtrar, agregar e alertar por campo. O id de correlação, ou trace id, conecta o que aconteceu num pedido do começo ao fim. Cuidado com dados pessoais e segredos, que não devem aparecer nos logs.
+
+- slug: percentil-de-latencia
+  title: A média que esconde o problema
+  difficulty: medio
+  kind: js
+  in: [building-for-scale/Monitoring]
+  study:
+    - { label: "Monitoring distributed systems (Google SRE, em inglês)", url: "https://sre.google/sre-book/monitoring-distributed-systems/" }
+  statement: |
+    A latência média do checkout é 120 ms, e mesmo assim muitas pessoas reclamam de lentidão. Escreva `percentil(valores, p)`, pelo método do posto mais próximo:
+
+    - ordene uma cópia dos valores, em ordem numérica
+    - o posto é `Math.ceil(p / 100 * n)`, contando a partir de 1
+    - devolva o valor nesse posto, ou `null` para uma lista vazia
+    - não altere a lista recebida
+  solution: |
+    function percentil(valores, p) {
+      if (!valores.length) return null;
+      const ordenados = [...valores].sort((a, b) => a - b);
+      const posto = Math.max(1, Math.ceil((p / 100) * ordenados.length));
+      return ordenados[posto - 1];
+    }
+  tests:
+    - name: p95 de 20 valores
+      code: |
+        const v = Array.from({ length: 20 }, (_, i) => i + 1);
+        expect(percentil(v, 95)).toBe(19);
+        expect(percentil(v, 50)).toBe(10);
+    - name: lista vazia
+      code: |
+        expect(percentil([], 99)).toBe(null);
+    - name: ordem numérica
+      hidden: true
+      code: |
+        expect(percentil([100, 20, 3], 100)).toBe(100);
+        expect(percentil([100, 20, 3], 34)).toBe(20);
+    - name: cauda lenta
+      hidden: true
+      code: |
+        const v = [...Array(90).fill(80), ...Array(10).fill(2500)];
+        expect(percentil(v, 90)).toBe(80);
+        expect(percentil(v, 95)).toBe(2500);
+    - name: não altera a lista
+      hidden: true
+      code: |
+        const v = [5, 1, 3];
+        percentil(v, 50);
+        expect(v).toEqual([5, 1, 3]);
+  hints:
+    - "`sort()` sem função compara como texto: `100` vem antes de `20`."
+  explanation: |
+    Médias escondem a cauda: 10% de pedidos lentos quase não mexem na média, mas atingem uma em cada dez pessoas. Percentis como p95 e p99 mostram a experiência dos mais afetados, e por isso metas de latência costumam ser escritas com eles.
+  traps:
+    - reason: Ordena como texto
+      code: |
+        function percentil(v, p) {
+          if (!v.length) return null;
+          const o = [...v].sort();
+          return o[Math.max(1, Math.ceil((p / 100) * o.length)) - 1];
+        }
+    - reason: Arredonda o posto para baixo
+      code: |
+        function percentil(v, p) {
+          if (!v.length) return null;
+          const o = [...v].sort((a, b) => a - b);
+          return o[Math.max(1, Math.floor((p / 100) * o.length)) - 1];
+        }
+
+- slug: alertar-pelo-sintoma
+  title: O alarme que toca toda madrugada
+  difficulty: medio
+  kind: quiz
+  in: [building-for-scale/Monitoring]
+  study:
+    - { label: "Monitoring distributed systems (Google SRE, em inglês)", url: "https://sre.google/sre-book/monitoring-distributed-systems/" }
+  statement: |
+    O plantão recebe alertas de "CPU acima de 80%" quase toda madrugada, durante o backup, e ninguém é afetado. Na semana passada, o checkout ficou com 30% de erros por uma hora e nenhum alerta tocou, porque a CPU estava normal.
+
+    O que mudar?
+  options:
+    - text: Alertar pelo sintoma que as pessoas sentem, como taxa de erros e latência do checkout acima do objetivo, e deixar métricas de causa, como CPU, nos painéis para investigar
+      why: Certo. Alertas devem exigir ação e refletir impacto real.
+    - text: Baixar o limite de CPU para 50%
+      why: Mais alertas falsos, e o problema real continuaria sem alerta.
+    - text: Desligar todos os alertas
+      why: Sem alertas, ninguém percebe incidentes reais a tempo.
+    - text: Criar um alerta para cada métrica disponível
+      why: Excesso de alertas faz o plantão ignorar todos.
+  answer: 0
+  explanation: |
+    Monitorar é acompanhar a saúde do sistema com métricas, painéis e alertas. Os quatro sinais de ouro são latência, tráfego, erros e saturação. Objetivos de nível de serviço, os SLOs, transformam esses sinais em metas e em alertas que importam.
+
+- slug: ler-traceparent
+  title: O rastro que atravessa os serviços
+  difficulty: medio
+  kind: js
+  in: [building-for-scale/Telemetry, building-for-scale/Instrumentation]
+  study:
+    - { label: "W3C Trace Context (em inglês)", url: "https://www.w3.org/TR/trace-context/" }
+    - { label: "Rastros (OpenTelemetry)", url: "https://opentelemetry.io/pt/docs/concepts/signals/traces/" }
+  statement: |
+    O pedido de compra passa por quatro serviços, e cada um repassa o cabeçalho `traceparent`, no formato do W3C Trace Context: `00-<trace-id>-<parent-id>-<flags>`.
+
+    Escreva `lerTraceparent(valor)`, que devolve `{ traceId, parentId, amostrado }` ou `null` quando o valor é inválido:
+
+    - versão com 2 dígitos hexadecimais, mas `ff` é inválida
+    - `trace-id` com 32 dígitos hexadecimais e `parent-id` com 16, em minúsculas, e nenhum dos dois pode ser só zeros
+    - `flags` com 2 dígitos hexadecimais. `amostrado` é `true` quando o bit mais baixo das flags vale 1
+  solution: |
+    function lerTraceparent(valor) {
+      const partes = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/.exec(String(valor));
+      if (!partes) return null;
+      const [, versao, traceId, parentId, flags] = partes;
+      if (versao === 'ff' || /^0+$/.test(traceId) || /^0+$/.test(parentId)) return null;
+      return { traceId, parentId, amostrado: (parseInt(flags, 16) & 1) === 1 };
+    }
+  tests:
+    - name: exemplo da especificação
+      code: |
+        expect(lerTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')).toEqual({
+          traceId: '4bf92f3577b34da6a3ce929d0e0e4736', parentId: '00f067aa0ba902b7', amostrado: true,
+        });
+    - name: formato errado
+      code: |
+        expect(lerTraceparent('00-4bf92f35-00f067aa0ba902b7-01')).toBe(null);
+        expect(lerTraceparent(undefined)).toBe(null);
+    - name: não amostrado e outras flags
+      hidden: true
+      code: |
+        expect(lerTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00').amostrado).toBe(false);
+        expect(lerTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-03').amostrado).toBe(true);
+    - name: ids só com zeros
+      hidden: true
+      code: |
+        expect(lerTraceparent('00-00000000000000000000000000000000-00f067aa0ba902b7-01')).toBe(null);
+        expect(lerTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01')).toBe(null);
+    - name: maiúsculas e versão ff
+      hidden: true
+      code: |
+        expect(lerTraceparent('00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01')).toBe(null);
+        expect(lerTraceparent('ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')).toBe(null);
+  hints:
+    - "`parseInt(flags, 16) & 1` isola o bit mais baixo."
+  explanation: |
+    Rastreamento distribuído liga as operações de vários serviços num só rastro. O `trace-id` identifica o rastro inteiro, e o `parent-id` identifica a operação que fez a chamada. O padrão W3C permite que ferramentas diferentes, como OpenTelemetry e serviços de nuvem, entendam o mesmo cabeçalho.
+  traps:
+    - reason: Amostrado só quando as flags são 01
+      code: |
+        function lerTraceparent(v) {
+          const m = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/.exec(String(v));
+          if (!m || m[1] === 'ff' || /^0+$/.test(m[2]) || /^0+$/.test(m[3])) return null;
+          return { traceId: m[2], parentId: m[3], amostrado: m[4] === '01' };
+        }
+    - reason: Aceita ids só com zeros
+      code: |
+        function lerTraceparent(v) {
+          const m = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/.exec(String(v));
+          if (!m || m[1] === 'ff') return null;
+          return { traceId: m[2], parentId: m[3], amostrado: (parseInt(m[4], 16) & 1) === 1 };
+        }
+
+- slug: tres-sinais-da-telemetria
+  title: Métricas, logs e rastros
+  difficulty: medio
+  kind: quiz
+  in: [building-for-scale/Telemetry]
+  study:
+    - { label: "O que é OpenTelemetry", url: "https://opentelemetry.io/pt/docs/what-is-opentelemetry/" }
+  statement: |
+    O painel mostra que o p99 do checkout subiu de 300 ms para 4 s às 19h. Qual sinal da telemetria responde melhor a pergunta "em qual serviço e em qual operação o tempo está sendo gasto"?
+  options:
+    - text: Os rastros, que mostram cada pedido como uma árvore de operações com a duração de cada uma, atravessando os serviços
+      why: Certo. As métricas mostraram que algo piorou. O rastro de um pedido lento mostra onde.
+    - text: Só as métricas, que já mostraram o problema
+      why: Métricas agregam. Elas dizem que piorou, mas raramente dizem onde.
+    - text: Os logs sem id de correlação
+      why: Sem ligar as linhas de um mesmo pedido, fica difícil montar o caminho dele.
+    - text: Nenhum, só reproduzindo em produção
+      why: A telemetria existe para entender produção sem precisar reproduzir.
+  answer: 0
+  explanation: |
+    Telemetria é o conjunto de sinais que o sistema emite: métricas, para tendências e alertas, logs, para os detalhes de cada evento, e rastros, para o caminho de cada pedido. O OpenTelemetry padroniza a coleta dos três, sem prender o sistema a um fornecedor.

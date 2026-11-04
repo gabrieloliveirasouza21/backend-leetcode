@@ -1,0 +1,974 @@
+- slug: bandas-em-atividade
+  title: Quem ainda está na estrada
+  difficulty: facil
+  kind: sql
+  in: [relational-databases/Consultas, relational-databases/SQLite]
+  study:
+    - { label: "SELECT (SQLite)", url: "https://www.sqlite.org/lang_select.html" }
+    - { label: "NULL no SQL (PostgreSQL)", url: "https://www.postgresql.org/docs/current/functions-comparison.html" }
+  statement: |
+    A API de line-up só deve listar bandas em atividade. Na tabela `bands`, `disbanded_year` é `NULL` quando a banda continua ativa.
+
+    Liste o `name` das bandas em atividade, em ordem alfabética.
+  ordered: true
+  solution: |
+    SELECT name FROM bands WHERE disbanded_year IS NULL ORDER BY name;
+  hints:
+    - Nada é igual a `NULL`, nem o próprio `NULL`. Use `IS NULL`.
+  explanation: |
+    `NULL` significa valor desconhecido, então qualquer comparação com `=` dá `NULL`, e a linha não passa no `WHERE`. `IS NULL` e `IS NOT NULL` são as comparações certas.
+  traps:
+    - { reason: "Compara com = NULL", code: "SELECT name FROM bands WHERE disbanded_year = NULL ORDER BY name;" }
+    - { reason: "Sem ordenação", code: "SELECT name FROM bands WHERE disbanded_year IS NULL;" }
+
+- slug: faixa-de-preco
+  title: Ingressos na faixa do bolso
+  difficulty: facil
+  kind: sql
+  in: [relational-databases/Consultas]
+  study:
+    - { label: "Expressões e BETWEEN (SQLite)", url: "https://www.sqlite.org/lang_expr.html" }
+  statement: |
+    O filtro de preço do app manda `minimo=60` e `maximo=100`, e os dois limites contam.
+
+    Liste `id` e `ticket_price` dos shows nessa faixa, do mais barato para o mais caro. Em empate de preço, pelo `id`.
+  ordered: true
+  solution: |
+    SELECT id, ticket_price FROM shows WHERE ticket_price BETWEEN 60 AND 100 ORDER BY ticket_price, id;
+  hints:
+    - "`BETWEEN a AND b` inclui os dois limites."
+  explanation: |
+    `BETWEEN` é inclusivo nas duas pontas. Filtros com `>` e `<` deixam de fora exatamente os preços iguais aos limites, que são os que mais aparecem em testes de borda. O segundo critério de ordenação torna o resultado previsível nos empates.
+  traps:
+    - { reason: "Limites exclusivos", code: "SELECT id, ticket_price FROM shows WHERE ticket_price > 60 AND ticket_price < 100 ORDER BY ticket_price, id;" }
+
+- slug: contatos-sem-veiculo
+  title: Jornalistas sem veículo
+  difficulty: facil
+  kind: sql
+  in: [relational-databases/Consultas]
+  study:
+    - { label: "Funções principais, como coalesce e trim (SQLite)", url: "https://www.sqlite.org/lang_corefunc.html" }
+  setup: |
+    UPDATE press_contacts SET outlet = '   ' WHERE id = (SELECT MAX(id) FROM press_contacts);
+  statement: |
+    Na tabela `press_contacts`, o campo `outlet` às vezes vem `NULL` e às vezes vem vazio, `''`, ou só com espaços. Os dois casos significam sem veículo.
+
+    Liste o `full_name` dos contatos sem veículo, em ordem alfabética.
+  ordered: true
+  solution: |
+    SELECT full_name FROM press_contacts WHERE TRIM(COALESCE(outlet, '')) = '' ORDER BY full_name;
+  hints:
+    - "`COALESCE(outlet, '')` troca o `NULL` por texto vazio, e `TRIM` tira os espaços."
+  explanation: |
+    Dados reais misturam `NULL`, texto vazio e espaços para dizer a mesma coisa. Normalizar na consulta resolve a leitura, e a solução definitiva é uma restrição no banco que padronize o valor na escrita.
+  traps:
+    - { reason: "Só o NULL", code: "SELECT full_name FROM press_contacts WHERE outlet IS NULL ORDER BY full_name;" }
+    - { reason: "Esquece os espaços", code: "SELECT full_name FROM press_contacts WHERE outlet IS NULL OR outlet = '' ORDER BY full_name;" }
+
+- slug: dominios-de-email
+  title: De quais redações vêm os contatos
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Consultas]
+  study:
+    - { label: "substr, instr e lower (SQLite)", url: "https://www.sqlite.org/lang_corefunc.html" }
+  statement: |
+    Liste os domínios de e-mail dos contatos de imprensa, sem repetição, em minúsculas e em ordem alfabética, numa coluna chamada `dominio`. O domínio é tudo depois do `@`.
+  ordered: true
+  solution: |
+    SELECT DISTINCT LOWER(SUBSTR(email, INSTR(email, '@') + 1)) AS dominio
+    FROM press_contacts
+    ORDER BY dominio;
+  hints:
+    - "`INSTR(email, '@')` dá a posição do `@`. `SUBSTR` corta a partir dali."
+    - O mesmo domínio pode aparecer com maiúsculas diferentes. Normalize antes do `DISTINCT`.
+  explanation: |
+    `DISTINCT` compara os valores já transformados, então `LOWER` precisa vir antes dele, dentro da expressão. Em sistemas reais, guardar o e-mail já normalizado na escrita evita repetir isso em toda consulta.
+  traps:
+    - { reason: "DISTINCT antes de normalizar", code: "SELECT LOWER(d) AS dominio FROM (SELECT DISTINCT SUBSTR(email, INSTR(email, '@') + 1) AS d FROM press_contacts) ORDER BY dominio;" }
+    - { reason: "Mantém o @", code: "SELECT DISTINCT LOWER(SUBSTR(email, INSTR(email, '@'))) AS dominio FROM press_contacts ORDER BY dominio;" }
+
+- slug: pagina-de-resultados
+  title: A segunda página da API
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Consultas, apis/REST]
+  study:
+    - { label: "LIMIT e OFFSET (SQLite)", url: "https://www.sqlite.org/lang_select.html#limitoffset" }
+    - { label: "Paginação por cursor (Use The Index, Luke, em inglês)", url: "https://use-the-index-luke.com/no-offset" }
+  statement: |
+    O endpoint `GET /shows?ordem=preco&pagina=2` devolve 3 shows por página, do mais caro para o mais barato.
+
+    Escreva a consulta da página 2: `id` e `ticket_price`. Shows com o mesmo preço vêm em ordem de `id`, para nenhum show aparecer em duas páginas.
+  ordered: true
+  solution: |
+    SELECT id, ticket_price FROM shows ORDER BY ticket_price DESC, id LIMIT 3 OFFSET 3;
+  hints:
+    - 'A página 2 pula os 3 primeiros: `OFFSET 3`.'
+    - Sem desempate, shows com o mesmo preço podem trocar de lugar entre uma página e outra.
+  explanation: |
+    Paginação só é estável com uma ordem total, que inclui uma coluna única no fim, como o `id`. Em tabelas grandes, `OFFSET` fica lento porque o banco percorre as linhas puladas. A paginação por cursor, com `WHERE (preco, id) < (?, ?)`, escala melhor.
+  traps:
+    - { reason: "Página errada", code: "SELECT id, ticket_price FROM shows ORDER BY ticket_price DESC, id LIMIT 3 OFFSET 2;" }
+
+- slug: agenda-completa
+  title: A agenda com banda e local
+  difficulty: facil
+  kind: sql
+  in: [relational-databases/Joins e agregações, relational-databases/PostgreSQL]
+  study:
+    - { label: "Joins entre tabelas (PostgreSQL)", url: "https://www.postgresql.org/docs/current/tutorial-join.html" }
+  statement: |
+    Liste os shows de 2026 com `show_date`, o nome da banda, como `banda`, e o nome do local, como `local`. Ordene pela data e, no mesmo dia, pelo nome da banda.
+  ordered: true
+  solution: |
+    SELECT s.show_date, b.name AS banda, v.name AS local
+    FROM shows s
+    JOIN bands b ON b.id = s.band_id
+    JOIN venues v ON v.id = s.venue_id
+    WHERE s.show_date BETWEEN '2026-01-01' AND '2026-12-31'
+    ORDER BY s.show_date, banda;
+  hints:
+    - Datas no formato `AAAA-MM-DD` ordenam e comparam bem como texto.
+    - Junte `shows` com `bands` e com `venues`.
+  explanation: |
+    Um `JOIN` combina linhas de tabelas pela chave estrangeira. Datas em ISO 8601 comparam como texto na ordem certa, o que permite usar `BETWEEN` em colunas `TEXT`. Em bancos com tipo `DATE`, como o PostgreSQL, a comparação é nativa.
+  traps:
+    - { reason: "Pega 2025 também", code: "SELECT s.show_date, b.name AS banda, v.name AS local FROM shows s JOIN bands b ON b.id = s.band_id JOIN venues v ON v.id = s.venue_id ORDER BY s.show_date, banda;" }
+    - { reason: "Esquece o desempate", code: "SELECT s.show_date, b.name AS banda, v.name AS local FROM shows s JOIN bands b ON b.id = s.band_id JOIN venues v ON v.id = s.venue_id WHERE s.show_date LIKE '2026%' ORDER BY s.show_date;" }
+
+- slug: ingressos-por-show
+  title: Shows sem nenhuma venda também contam
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Joins e agregações]
+  study:
+    - { label: "LEFT JOIN (SQLite)", url: "https://www.sqlite.org/lang_select.html#strange_join_names" }
+    - { label: "Funções de agregação (SQLite)", url: "https://www.sqlite.org/lang_aggfunc.html" }
+  statement: |
+    O painel da produção mostra, para cada show, quantos ingressos pagos foram vendidos. Shows sem nenhuma venda paga também aparecem, com `0`.
+
+    Liste o `id` do show e a soma de `quantity` dos ingressos com `status` igual a `'pago'`, como `vendidos`, ordenado por `id`.
+  ordered: true
+  solution: |
+    SELECT s.id, COALESCE(SUM(t.quantity), 0) AS vendidos
+    FROM shows s
+    LEFT JOIN tickets t ON t.show_id = s.id AND t.status = 'pago'
+    GROUP BY s.id
+    ORDER BY s.id;
+  hints:
+    - Com `JOIN` comum, shows sem ingressos somem do resultado.
+    - O filtro de status vai no `ON`. No `WHERE`, ele elimina as linhas do `LEFT JOIN` que vieram sem ingresso.
+    - "`SUM` de nada é `NULL`. `COALESCE` troca por 0."
+  explanation: |
+    O `LEFT JOIN` mantém todos os shows. A condição do lado direito precisa ficar no `ON`: no `WHERE`, `t.status = 'pago'` descarta as linhas em que `t` é `NULL`, e o `LEFT JOIN` vira um `JOIN` comum sem ninguém perceber.
+  traps:
+    - { reason: "Filtro no WHERE", code: "SELECT s.id, COALESCE(SUM(t.quantity), 0) AS vendidos FROM shows s LEFT JOIN tickets t ON t.show_id = s.id WHERE t.status = 'pago' GROUP BY s.id ORDER BY s.id;" }
+    - { reason: "NULL no lugar de zero", code: "SELECT s.id, SUM(t.quantity) AS vendidos FROM shows s LEFT JOIN tickets t ON t.show_id = s.id AND t.status = 'pago' GROUP BY s.id ORDER BY s.id;" }
+
+- slug: faturamento-por-banda
+  title: As bandas que mais faturaram
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Joins e agregações, relational-databases/MySQL]
+  study:
+    - { label: "GROUP BY e HAVING (SQLite)", url: "https://www.sqlite.org/lang_select.html#resultset" }
+  statement: |
+    Calcule o faturamento de cada banda: a soma de `ticket_price * quantity` dos ingressos pagos dos shows dela. Mostre `name` e `faturamento`, só das bandas com faturamento acima de 500, do maior para o menor. Em empate, pelo nome.
+  ordered: true
+  solution: |
+    SELECT b.name, SUM(s.ticket_price * t.quantity) AS faturamento
+    FROM bands b
+    JOIN shows s ON s.band_id = b.id
+    JOIN tickets t ON t.show_id = s.id
+    WHERE t.status = 'pago'
+    GROUP BY b.id, b.name
+    HAVING SUM(s.ticket_price * t.quantity) > 500
+    ORDER BY faturamento DESC, b.name;
+  hints:
+    - "`WHERE` filtra linhas antes de agrupar. `HAVING` filtra os grupos depois."
+  explanation: |
+    O filtro sobre o resultado de uma agregação só pode ir no `HAVING`, que roda depois do `GROUP BY`. O filtro por status vai no `WHERE`, antes de agrupar, porque é sobre cada ingresso. Agrupar pelo `id` evita juntar duas bandas com o mesmo nome.
+  traps:
+    - { reason: "Conta todos os status", code: "SELECT b.name, SUM(s.ticket_price * t.quantity) AS faturamento FROM bands b JOIN shows s ON s.band_id = b.id JOIN tickets t ON t.show_id = s.id GROUP BY b.id HAVING faturamento > 500 ORDER BY faturamento DESC, b.name;" }
+
+- slug: bandas-sem-show
+  title: Bandas fora da programação
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Joins e agregações]
+  study:
+    - { label: "EXISTS e subconsultas (PostgreSQL)", url: "https://www.postgresql.org/docs/current/functions-subquery.html" }
+  statement: |
+    Liste o `name` das bandas que não têm nenhum show cadastrado, em ordem alfabética.
+  ordered: true
+  solution: |
+    SELECT b.name FROM bands b
+    WHERE NOT EXISTS (SELECT 1 FROM shows s WHERE s.band_id = b.id)
+    ORDER BY b.name;
+  hints:
+    - "`NOT EXISTS` com uma subconsulta, ou `LEFT JOIN` e `WHERE s.id IS NULL`."
+  explanation: |
+    Anti-join é encontrar linhas sem correspondência. `NOT EXISTS` é a forma mais segura. `NOT IN` com uma subconsulta que pode ter `NULL` devolve nada, porque `x NOT IN (1, NULL)` nunca é verdadeiro.
+  traps:
+    - { reason: "Bandas com show", code: "SELECT DISTINCT b.name FROM bands b JOIN shows s ON s.band_id = b.id ORDER BY b.name;" }
+
+- slug: ranking-por-banda
+  title: O show mais caro de cada banda
+  difficulty: dificil
+  kind: sql
+  in: [relational-databases/Joins e agregações, relational-databases/PostgreSQL]
+  study:
+    - { label: "Funções de janela (SQLite)", url: "https://www.sqlite.org/windowfunctions.html" }
+    - { label: "Funções de janela (PostgreSQL)", url: "https://www.postgresql.org/docs/current/tutorial-window.html" }
+  statement: |
+    Para cada banda que tem shows, mostre o show de ingresso mais caro: `band_id`, `id` do show e `ticket_price`. Em empate de preço dentro da mesma banda, fica o show de menor `id`. Ordene por `band_id`.
+  ordered: true
+  solution: |
+    SELECT band_id, id, ticket_price FROM (
+      SELECT band_id, id, ticket_price,
+             ROW_NUMBER() OVER (PARTITION BY band_id ORDER BY ticket_price DESC, id) AS posicao
+      FROM shows
+    )
+    WHERE posicao = 1
+    ORDER BY band_id;
+  hints:
+    - "`ROW_NUMBER() OVER (PARTITION BY band_id ORDER BY ...)` numera os shows dentro de cada banda."
+    - Filtre a numeração numa consulta de fora, porque o `WHERE` roda antes das funções de janela.
+  explanation: |
+    Funções de janela calculam algo para cada linha olhando um grupo, sem juntar as linhas como o `GROUP BY`. `ROW_NUMBER` com desempate escolhe exatamente uma linha por grupo. `MAX` com `GROUP BY` dá o preço, mas não diz qual show tem aquele preço.
+  traps:
+    - { reason: "RANK deixa empates", code: "SELECT band_id, id, ticket_price FROM (SELECT band_id, id, ticket_price, RANK() OVER (PARTITION BY band_id ORDER BY ticket_price DESC) AS p FROM shows) WHERE p = 1 ORDER BY band_id;" }
+
+- slug: entradas-por-hora
+  title: O horário de pico em cada portão
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Joins e agregações, more-databases/Profiling Performance]
+  study:
+    - { label: "Funções de data (SQLite)", url: "https://www.sqlite.org/lang_datefunc.html" }
+  statement: |
+    A tabela `checkins` registra cada entrada, com `gate` e `scanned_at` no formato `AAAA-MM-DD HH:MM:SS`. Para dimensionar as equipes, conte as entradas por portão e por hora do dia.
+
+    Mostre `gate`, `hora`, com dois dígitos, como `'19'`, e `entradas`, ordenado por portão e hora.
+  ordered: true
+  solution: |
+    SELECT gate, strftime('%H', scanned_at) AS hora, COUNT(*) AS entradas
+    FROM checkins
+    GROUP BY gate, hora
+    ORDER BY gate, hora;
+  hints:
+    - "`strftime('%H', data)` extrai a hora com dois dígitos."
+  explanation: |
+    Agrupar por uma expressão, como a hora extraída da data, é a base de relatórios por período. Em bancos grandes, uma coluna calculada e indexada para a hora evita recalcular a expressão em toda consulta.
+  traps:
+    - { reason: "Agrupa só por hora", code: "SELECT gate, strftime('%H', scanned_at) AS hora, COUNT(*) AS entradas FROM checkins GROUP BY hora ORDER BY gate, hora;" }
+
+- slug: tabela-de-patrocinios
+  title: A tabela de patrocínios
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Modelagem e restrições]
+  study:
+    - { label: "CREATE TABLE e restrições (SQLite)", url: "https://www.sqlite.org/lang_createtable.html" }
+  statement: |
+    Crie a tabela `sponsors`, em que o banco garante as regras sozinho, sem depender do código da API:
+
+    - `id` inteiro, chave primária
+    - `name` texto, obrigatório e sem repetição
+    - `amount` número, obrigatório e maior que zero
+    - `band_id` opcional, que precisa apontar para uma banda existente
+  check: SELECT name, type, "notnull", pk FROM pragma_table_info('sponsors') ORDER BY cid
+  ordered: true
+  accepts:
+    - "INSERT INTO sponsors (id, name, amount, band_id) VALUES (1, 'Cervejaria Norte', 5000, 1)"
+    - "INSERT INTO sponsors (id, name, amount) VALUES (2, 'Rádio Rock', 1200)"
+  rejects:
+    - "INSERT INTO sponsors (id, name, amount) VALUES (3, 'Cervejaria Norte', 300)"
+    - "INSERT INTO sponsors (id, name, amount) VALUES (4, 'Loja Zero', 0)"
+    - "INSERT INTO sponsors (id, name, amount) VALUES (5, NULL, 100)"
+    - "INSERT INTO sponsors (id, name, amount, band_id) VALUES (6, 'Fantasma', 100, 999)"
+  solution: |
+    CREATE TABLE sponsors (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      amount REAL NOT NULL CHECK (amount > 0),
+      band_id INTEGER REFERENCES bands(id)
+    );
+  hints:
+    - "`UNIQUE` impede repetição, e `CHECK (amount > 0)` valida o valor."
+    - "`REFERENCES bands(id)` cria a chave estrangeira."
+  explanation: |
+    Restrições no banco valem para qualquer caminho de escrita: a API, um script de importação ou alguém no console. Validar só no código deixa o dado inconsistente na primeira vez que alguém escrever por outro caminho.
+  traps:
+    - { reason: "Sem CHECK", code: "CREATE TABLE sponsors (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, amount REAL NOT NULL, band_id INTEGER REFERENCES bands(id));" }
+    - { reason: "Sem chave estrangeira", code: "CREATE TABLE sponsors (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, amount REAL NOT NULL CHECK (amount > 0), band_id INTEGER);" }
+
+- slug: entrada-unica
+  title: Um ingresso, uma entrada
+  difficulty: medio
+  kind: sql
+  visual: corrida
+  in: [relational-databases/Modelagem e restrições, more-databases/Failure Modes]
+  study:
+    - { label: "CREATE INDEX e índices únicos (SQLite)", url: "https://www.sqlite.org/lang_createindex.html" }
+  statement: |
+    Dois leitores de portão às vezes registram o mesmo ingresso ao mesmo tempo, e a mesma pessoa entra duas vezes. O código da API confere antes de inserir, mas a corrida entre os dois pedidos passa pela checagem.
+
+    Faça o banco recusar um segundo check-in do mesmo `ticket_id`, sem alterar os dados que já existem.
+  check: SELECT COUNT(*) FROM checkins
+  accepts:
+    - "INSERT INTO checkins (ticket_id, gate, scanned_at) VALUES (4, 'Norte', '2026-05-02 19:00:00')"
+  rejects:
+    - "INSERT INTO checkins (ticket_id, gate, scanned_at) VALUES (1, 'Sul', '2026-03-14 18:06:00')"
+  solution: |
+    CREATE UNIQUE INDEX idx_checkins_ticket ON checkins(ticket_id);
+  hints:
+    - Uma checagem no código e a inserção são duas operações. Entre elas, outro pedido pode inserir.
+    - Um índice único faz o próprio banco recusar a duplicata, de forma atômica.
+  explanation: |
+    Conferir antes de inserir tem uma janela de corrida: os dois pedidos conferem, os dois veem que não existe, os dois inserem. Uma restrição de unicidade é verificada pelo banco no momento da escrita. A API só precisa tratar o erro de violação como "já entrou".
+  traps:
+    - { reason: "Índice comum, que não impede duplicata", code: "CREATE INDEX idx_checkins_ticket ON checkins(ticket_id);" }
+
+- slug: apagar-em-cascata
+  title: O show cancelado e seus horários
+  difficulty: medio
+  kind: sql
+  in: [relational-databases/Modelagem e restrições]
+  study:
+    - { label: "Chaves estrangeiras e ON DELETE (SQLite)", url: "https://www.sqlite.org/foreignkeys.html#fk_actions" }
+  statement: |
+    Crie a tabela `slots`, com os horários de passagem de som de cada show:
+
+    - `id` inteiro, chave primária
+    - `show_id`, obrigatório, apontando para `shows`
+    - `starts_at` texto, obrigatório
+
+    Quando um show for apagado, os horários dele devem ser apagados junto, pelo próprio banco.
+  check: |
+    INSERT INTO slots (id, show_id, starts_at) SELECT 1, MIN(id), '14:00' FROM shows;
+    INSERT INTO slots (id, show_id, starts_at) SELECT 2, MIN(id), '15:00' FROM shows;
+    INSERT INTO slots (id, show_id, starts_at) SELECT 3, MAX(id), '14:00' FROM shows;
+    DELETE FROM checkins WHERE ticket_id IN (SELECT id FROM tickets WHERE show_id = (SELECT MIN(id) FROM shows));
+    DELETE FROM tickets WHERE show_id = (SELECT MIN(id) FROM shows);
+    DELETE FROM shows WHERE id = (SELECT MIN(id) FROM shows);
+    SELECT id FROM slots ORDER BY id
+  ordered: true
+  rejects:
+    - "INSERT INTO slots (id, show_id, starts_at) VALUES (9, 999, '10:00')"
+  solution: |
+    CREATE TABLE slots (
+      id INTEGER PRIMARY KEY,
+      show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
+      starts_at TEXT NOT NULL
+    );
+  hints:
+    - "`ON DELETE CASCADE` na chave estrangeira apaga as linhas filhas junto com a mãe."
+  explanation: |
+    Ações de chave estrangeira, como `CASCADE`, `SET NULL` e `RESTRICT`, deixam a regra no banco. `CASCADE` serve para dados que só existem por causa do pai, como estes horários. Para dados com valor próprio, como ingressos vendidos, `RESTRICT` é mais seguro: impede apagar o show sem tratar as vendas antes.
+  traps:
+    - { reason: "Sem cascata", code: "CREATE TABLE slots (id INTEGER PRIMARY KEY, show_id INTEGER NOT NULL REFERENCES shows(id), starts_at TEXT NOT NULL);" }
+    - { reason: "Sem chave estrangeira", code: "CREATE TABLE slots (id INTEGER PRIMARY KEY, show_id INTEGER NOT NULL, starts_at TEXT NOT NULL);" }
+
+- slug: devolver-o-criado
+  title: Devolver o que foi inserido
+  difficulty: facil
+  kind: sql
+  in: [relational-databases/PostgreSQL, relational-databases/SQLite, apis/REST]
+  study:
+    - { label: "RETURNING (SQLite)", url: "https://www.sqlite.org/lang_returning.html" }
+    - { label: "RETURNING (PostgreSQL)", url: "https://www.postgresql.org/docs/current/dml-returning.html" }
+  statement: |
+    O endpoint `POST /bandas` precisa responder com a banda criada, inclusive o `id` gerado pelo banco, sem fazer uma segunda consulta.
+
+    Insira a banda `Estática`, do `Brasil`, de `Grindcore`, formada em `2022`, sem informar o `id`, e devolva `id` e `name` no mesmo comando.
+  check: SELECT name, country, genre, formed_year, disbanded_year FROM bands WHERE name = 'Estática'
+  solution: |
+    INSERT INTO bands (name, country, genre, formed_year)
+    VALUES ('Estática', 'Brasil', 'Grindcore', 2022)
+    RETURNING id, name;
+  must_use: [RETURNING]
+  hints:
+    - "`RETURNING` no fim do `INSERT` devolve as colunas da linha inserida."
+  explanation: |
+    `RETURNING`, no PostgreSQL e no SQLite, devolve a linha escrita no mesmo comando, inclusive valores gerados pelo banco, como o `id` e os padrões. Isso evita a corrida de buscar o último id inserido depois, que pode pegar a linha de outro pedido.
+  traps:
+    - { reason: "Com o nome errado", code: "INSERT INTO bands (name, country, genre, formed_year) VALUES ('Estatica', 'Brasil', 'Grindcore', 2022) RETURNING id, name;" }
+
+- slug: escolher-o-sqlite
+  title: SQLite em produção?
+  difficulty: medio
+  kind: quiz
+  in: [relational-databases/SQLite]
+  study:
+    - { label: "Quando usar o SQLite", url: "https://www.sqlite.org/whentouse.html" }
+  statement: |
+    Você vai criar dois sistemas: um app de check-in que roda offline nos tablets da portaria e sincroniza depois, e a API de vendas, com dezenas de servidores escrevendo ao mesmo tempo.
+
+    Onde o SQLite combina melhor?
+  options:
+    - text: No app dos tablets. O SQLite é um banco embutido num arquivo, sem servidor, ótimo para um dispositivo. A API com muitos servidores escrevendo pede um banco cliente-servidor, como PostgreSQL ou MySQL
+      why: Certo. O SQLite brilha embutido e em leitura pesada. Muitas escritas de máquinas diferentes no mesmo banco é o caso em que ele não serve.
+    - text: Na API de vendas, porque é o banco mais rápido que existe
+      why: Ele é rápido em uma máquina, mas escritas concorrentes de vários servidores pela rede não são o modelo dele.
+    - text: Em nenhum dos dois, porque SQLite é só para testes
+      why: O SQLite roda em bilhões de dispositivos em produção, de celulares a navegadores.
+    - text: Nos dois, desde que o arquivo fique numa pasta compartilhada da rede
+      why: Compartilhar o arquivo por rede é justamente o uso que a documentação desaconselha, por problemas de travas.
+  answer: 0
+  explanation: |
+    SQLite é uma biblioteca que guarda o banco inteiro num arquivo local. Não há servidor, nem rede, nem usuários. Isso o torna ideal em aplicativos, dispositivos e ferramentas. Sistemas com muitos clientes escrevendo ao mesmo tempo de máquinas diferentes usam bancos cliente-servidor.
+
+- slug: emoji-no-mysql
+  title: O nome da banda com emoji
+  difficulty: medio
+  kind: quiz
+  in: [relational-databases/MySQL, relational-databases/MariaDB]
+  study:
+    - { label: "Conjunto de caracteres utf8mb4 (MySQL)", url: "https://dev.mysql.com/doc/refman/8.4/en/charset-unicode-utf8mb4.html" }
+  statement: |
+    Uma banda se cadastrou como `Fogo 🔥`, e o MySQL gravou `Fogo ????`. A tabela foi criada há anos com o conjunto de caracteres `utf8`.
+
+    O que explica isso, no MySQL e no MariaDB?
+  options:
+    - text: O `utf8` antigo do MySQL guarda até 3 bytes por caractere e não comporta emojis, que usam 4. O certo é `utf8mb4`
+      why: Certo. utf8mb4 é o UTF-8 completo. O utf8 antigo, também chamado utf8mb3, é uma versão limitada.
+    - text: Bancos de dados não aceitam emojis
+      why: Aceitam, com o conjunto de caracteres certo.
+    - text: O navegador da pessoa não suporta emojis
+      why: O texto chegou ao servidor. A troca por interrogações aconteceu ao gravar na coluna.
+    - text: O problema é o tamanho do VARCHAR
+      why: O tamanho limita a quantidade de caracteres, não quais caracteres cabem.
+  answer: 0
+  explanation: |
+    No MySQL e no MariaDB, use `utf8mb4` nas tabelas, nas colunas e na conexão. Versões recentes do MySQL já usam utf8mb4 por padrão, mas tabelas antigas carregam o legado. PostgreSQL e SQLite usam UTF-8 completo desde sempre.
+
+- slug: dialetos-de-sql
+  title: Os 10 primeiros em cada banco
+  difficulty: medio
+  kind: quiz
+  in: [relational-databases/MS SQL, relational-databases/Oracle, relational-databases/PostgreSQL, relational-databases/MariaDB]
+  study:
+    - { label: "TOP (SQL Server)", url: "https://learn.microsoft.com/pt-br/sql/t-sql/queries/top-transact-sql" }
+    - { label: "Limitando linhas (Oracle, em inglês)", url: "https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/SELECT.html" }
+  statement: |
+    O mesmo relatório precisa rodar em vários bancos, com os 10 shows mais caros. Em PostgreSQL, MySQL, MariaDB e SQLite, ele termina com `LIMIT 10`.
+
+    Qual afirmação está correta?
+  options:
+    - text: No SQL Server se usa `SELECT TOP 10`, e o Oracle e o padrão SQL usam `FETCH FIRST 10 ROWS ONLY`, que o SQL Server e o PostgreSQL também aceitam com `OFFSET`
+      why: Certo. O SQL tem um padrão, mas cada banco tem extensões e sintaxes próprias. ORMs e query builders escondem essas diferenças.
+    - text: Todos os bancos aceitam `LIMIT 10`
+      why: SQL Server e versões antigas do Oracle não aceitam LIMIT.
+    - text: O SQL é idêntico em todos os bancos
+      why: O núcleo é parecido, mas tipos, funções de data, paginação e muitos detalhes mudam.
+    - text: No Oracle não dá para limitar linhas
+      why: Dá, com FETCH FIRST ou, em versões antigas, com ROWNUM.
+  answer: 0
+  explanation: |
+    Cada banco segue o padrão SQL até certo ponto e acrescenta o próprio dialeto: T-SQL no SQL Server, PL/SQL no Oracle, PL/pgSQL no PostgreSQL. Trocar de banco exige revisar paginação, funções de data, tipos e procedimentos armazenados.
+
+- slug: coluna-nova-com-padrao
+  title: Uma coluna nova sem quebrar nada
+  difficulty: facil
+  kind: sql
+  in: [relational-databases/Migrations]
+  study:
+    - { label: "ALTER TABLE (SQLite)", url: "https://www.sqlite.org/lang_altertable.html" }
+  statement: |
+    A API vai marcar bandas verificadas. Escreva a migração que acrescenta a coluna `verified` à tabela `bands`: inteiro, obrigatório, com padrão `0`. As bandas que já existem devem ficar com `0`, e inserções antigas, que não informam a coluna, devem continuar funcionando.
+  check: SELECT id, verified FROM bands ORDER BY id
+  ordered: true
+  accepts:
+    - "INSERT INTO bands (id, name, country, genre, formed_year) VALUES (99, 'Nova', 'Brasil', 'Punk', 2024)"
+  rejects:
+    - "INSERT INTO bands (id, name, country, genre, formed_year, verified) VALUES (98, 'Outra', 'Brasil', 'Punk', 2024, NULL)"
+  solution: |
+    ALTER TABLE bands ADD COLUMN verified INTEGER NOT NULL DEFAULT 0;
+  hints:
+    - Uma coluna `NOT NULL` precisa de um `DEFAULT` para as linhas que já existem.
+  explanation: |
+    Migrações que acrescentam colunas precisam ser compatíveis com o código que ainda está rodando. Com `DEFAULT`, as linhas antigas recebem um valor e as inserções que não conhecem a coluna continuam funcionando. Em bancos grandes, confira se o `ALTER` trava a tabela.
+  traps:
+    - { reason: "Coluna aceita nulo", code: "ALTER TABLE bands ADD COLUMN verified INTEGER DEFAULT 0;" }
+
+- slug: renomear-sem-derrubar
+  title: Renomear uma coluna em produção
+  difficulty: dificil
+  kind: quiz
+  in: [relational-databases/Migrations, architectural-patterns/Twelve Factor Apps]
+  study:
+    - { label: "Expand and contract (Martin Fowler, em inglês)", url: "https://martinfowler.com/bliki/ParallelChange.html" }
+  statement: |
+    A coluna `buyer` vai virar `buyer_name`. A API roda em vários servidores, e o deploy troca um servidor de cada vez, então por alguns minutos as versões antiga e nova rodam juntas.
+
+    Qual plano não derruba nenhuma requisição?
+  options:
+    - text: Criar `buyer_name`, fazer o código escrever nas duas colunas e copiar os dados antigos, passar a ler da nova, e só num deploy posterior remover `buyer`
+      why: 'Certo. É o padrão expandir e contrair: cada passo é compatível com a versão do código que está rodando ao lado.'
+    - text: Renomear a coluna e fazer o deploy logo em seguida
+      why: Durante o deploy, os servidores antigos procuram buyer, que não existe mais, e falham.
+    - text: Fazer o deploy do código novo primeiro e renomear depois
+      why: O código novo procura buyer_name, que ainda não existe.
+    - text: Desligar o site durante a migração
+      why: Funciona, mas com indisponibilidade, que é o que se quer evitar.
+  answer: 0
+  explanation: |
+    Em sistemas com deploy gradual, o banco precisa atender duas versões do código ao mesmo tempo. Mudanças destrutivas, como renomear e apagar, viram vários passos compatíveis: acrescentar, migrar dados, trocar a leitura e só então remover.
+
+- slug: baixar-estoque-sem-corrida
+  title: O último boné vendido duas vezes
+  difficulty: medio
+  kind: sql
+  visual: corrida
+  in: [more-databases/Transactions, more-databases/ACID]
+  study:
+    - { label: "UPDATE (SQLite)", url: "https://www.sqlite.org/lang_update.html" }
+    - { label: "Isolamento de transações (PostgreSQL)", url: "https://www.postgresql.org/docs/current/transaction-iso.html" }
+  statement: |
+    O código antigo lê o estoque, confere no JavaScript e depois grava `stock - 1`. Dois pedidos simultâneos leem `1` e os dois vendem o último item.
+
+    Escreva um único `UPDATE` que tira 1 do estoque dos produtos `merch` de id 1, 2 e 5, mas só quando ainda há estoque. O produto sem estoque fica com 0, sem ir para negativo.
+  check: SELECT id, stock FROM merch ORDER BY id
+  ordered: true
+  solution: |
+    UPDATE merch SET stock = stock - 1 WHERE id IN (1, 2, 5) AND stock > 0;
+  hints:
+    - A condição de estoque vai no próprio `WHERE` do `UPDATE`. Assim, ler e gravar viram uma operação só.
+  explanation: |
+    Ler, decidir no código e gravar abre uma janela para outro pedido mudar o valor no meio. Um `UPDATE` com a condição no `WHERE` é atômico: o banco confere e grava de uma vez, e o número de linhas afetadas diz à API se a venda aconteceu.
+  traps:
+    - { reason: "Sem a condição de estoque", code: "UPDATE merch SET stock = stock - 1 WHERE id IN (1, 2, 5);" }
+    - { reason: "Para em zero, mas atualiza todo mundo", code: "UPDATE merch SET stock = MAX(stock - 1, 0);" }
+
+- slug: transacao-de-compra
+  title: A compra pela metade
+  difficulty: medio
+  kind: quiz
+  visual: corrida
+  in: [more-databases/Transactions, more-databases/ACID]
+  study:
+    - { label: "Transações (PostgreSQL)", url: "https://www.postgresql.org/docs/current/tutorial-transactions.html" }
+  statement: |
+    Uma compra faz três escritas: grava o ingresso, baixa o estoque do setor e registra o pagamento. O servidor caiu depois da segunda, e agora há estoque baixado sem pagamento.
+
+    O que teria evitado isso?
+  options:
+    - text: Fazer as três escritas dentro de uma transação, com BEGIN e COMMIT. Se algo falhar antes do COMMIT, o banco desfaz tudo
+      why: 'Certo. É a atomicidade do ACID: ou todas as escritas valem, ou nenhuma.'
+    - text: Fazer as escritas em ordem alfabética
+      why: A ordem não impede o estado parcial quando a falha acontece no meio.
+    - text: Usar um servidor mais estável
+      why: Falhas sempre acontecem. O sistema precisa continuar consistente quando elas acontecem.
+    - text: Conferir de hora em hora e corrigir à mão
+      why: Isso aceita a inconsistência e cria trabalho manual, em vez de evitá-la.
+  answer: 0
+  explanation: |
+    ACID resume as garantias de uma transação: atomicidade, consistência, isolamento e durabilidade. A atomicidade garante tudo ou nada, a durabilidade garante que o que foi confirmado sobrevive a uma queda. Operações em vários serviços não têm isso de graça e pedem padrões como sagas.
+
+- slug: isolamento-e-leitura
+  title: O relatório com números que não fecham
+  difficulty: dificil
+  kind: quiz
+  visual: corrida
+  in: [more-databases/Transactions]
+  study:
+    - { label: "Isolamento de transações (PostgreSQL)", url: "https://www.postgresql.org/docs/current/transaction-iso.html" }
+  statement: |
+    Um relatório lê o total de ingressos vendidos e, em seguida, a lista de vendas, para mostrar os dois. Entre as duas leituras, outras vendas são confirmadas, e o total não bate com a soma da lista.
+
+    O que resolve?
+  options:
+    - text: Fazer as duas leituras na mesma transação com isolamento REPEATABLE READ, que enxerga o banco como estava no início da transação
+      why: Certo. Esse nível dá ao relatório uma foto consistente, mesmo com escritas acontecendo ao lado.
+    - text: Ler mais rápido
+      why: A janela fica menor, mas continua existindo.
+    - text: Bloquear todas as vendas enquanto o relatório roda
+      why: Funciona, mas para o festival inteiro por causa de um relatório.
+    - text: Isolamento READ UNCOMMITTED
+      why: Esse nível é o mais fraco, e permite ler até dados de transações que ainda não confirmaram.
+  answer: 0
+  explanation: |
+    Níveis de isolamento definem o que uma transação enxerga das outras. READ COMMITTED, o padrão do PostgreSQL, enxerga cada leitura no momento em que roda. REPEATABLE READ mantém a mesma foto durante a transação, e SERIALIZABLE garante resultado equivalente a rodar uma transação de cada vez.
+
+- slug: orm-e-sql
+  title: O ORM gerou uma consulta estranha
+  difficulty: medio
+  kind: quiz
+  in: [more-databases/ORMs]
+  study:
+    - { label: "Prisma: consultas brutas (em inglês)", url: "https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries" }
+  statement: |
+    O time usa um ORM em toda a API. Um relatório com várias agregações ficou lento, e o SQL gerado pelo ORM tem subconsultas desnecessárias.
+
+    Qual é a abordagem mais razoável?
+  options:
+    - text: Manter o ORM no dia a dia e, nesse relatório, escrever o SQL à mão, com parâmetros, usando a via de consultas brutas que o ORM oferece
+      why: Certo. ORMs agilizam o trabalho comum, e todos oferecem uma saída para SQL quando a consulta gerada não serve.
+    - text: Trocar o ORM inteiro por SQL concatenado em texto
+      why: Concatenar valores no SQL abre espaço para injeção. SQL manual deve usar parâmetros.
+    - text: Aceitar a lentidão, porque ORMs são sempre ótimos
+      why: ORMs geram SQL genérico, que nem sempre é o melhor para casos específicos.
+    - text: Criar um índice em todas as colunas
+      why: Índices demais deixam as escritas lentas, e podem nem resolver o problema da consulta gerada.
+  answer: 0
+  explanation: |
+    Um ORM mapeia tabelas para objetos e gera SQL a partir do código. Ele reduz repetição e erros simples, mas esconde o SQL. Saber ler o que ele gera, perceber N+1 e partir para SQL parametrizado quando preciso é parte de usar bem a ferramenta.
+
+- slug: consulta-parametrizada
+  title: A busca que aceitava qualquer coisa
+  difficulty: medio
+  kind: js
+  in: [more-databases/ORMs, web-security/OWASP Risks]
+  study:
+    - { label: "Prevenção de injeção de SQL (OWASP)", url: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html" }
+    - { label: "LIKE e ESCAPE (SQLite)", url: "https://www.sqlite.org/lang_expr.html#like" }
+  statement: |
+    A busca de bandas montava o SQL concatenando o texto digitado. Escreva `buscaPorNome(texto)`, que devolve `{ sql, params }` para um driver que aceita `?` como marcador:
+
+    - o SQL é `SELECT id, name FROM bands WHERE name LIKE ? ESCAPE '\' ORDER BY name`
+    - o parâmetro busca o texto em qualquer parte do nome: `%texto%`
+    - `%`, `_` e `\` digitados pela pessoa valem como caracteres comuns, e não como curingas: escape cada um com `\`
+  solution: |
+    function buscaPorNome(texto) {
+      const escapado = String(texto).replace(/[\\%_]/g, (c) => '\\' + c);
+      return {
+        sql: "SELECT id, name FROM bands WHERE name LIKE ? ESCAPE '\\' ORDER BY name",
+        params: [`%${escapado}%`],
+      };
+    }
+  tests:
+    - name: SQL com marcador
+      code: |
+        const r = buscaPorNome('Ferro');
+        expect(r.sql).toBe("SELECT id, name FROM bands WHERE name LIKE ? ESCAPE '\\' ORDER BY name");
+        expect(r.params).toEqual(['%Ferro%']);
+    - name: tentativa de injeção vira texto
+      code: |
+        const r = buscaPorNome("x' OR '1'='1");
+        expect(r.sql).not.toContain("'1'='1");
+        expect(r.params).toEqual(["%x' OR '1'='1%"]);
+    - name: curingas escapados
+      hidden: true
+      code: |
+        expect(buscaPorNome('100%').params).toEqual(['%100\\%%']);
+        expect(buscaPorNome('a_b').params).toEqual(['%a\\_b%']);
+        expect(buscaPorNome('c\\d').params).toEqual(['%c\\\\d%']);
+  hints:
+    - O texto da pessoa vai só nos parâmetros. O SQL é sempre o mesmo.
+    - Escape a barra primeiro, ou num só passo com uma regex, para não escapar duas vezes.
+  explanation: |
+    Consultas parametrizadas mandam o SQL e os valores separados, e o banco nunca interpreta o valor como código. Isso elimina a injeção de SQL. Dentro de um `LIKE`, `%` e `_` ainda são curingas, então o texto também precisa de escape para a busca fazer o que a pessoa digitou.
+  traps:
+    - { reason: "Concatena o texto no SQL", code: "function buscaPorNome(t) { return { sql: \"SELECT id, name FROM bands WHERE name LIKE '%\" + t + \"%' ESCAPE '\\\\' ORDER BY name\", params: [] }; }" }
+    - { reason: "Não escapa os curingas", code: "function buscaPorNome(t) { return { sql: \"SELECT id, name FROM bands WHERE name LIKE ? ESCAPE '\\\\' ORDER BY name\", params: [`%${t}%`] }; }" }
+
+- slug: tabela-de-generos
+  title: O gênero escrito de três jeitos
+  difficulty: medio
+  kind: sql
+  in: [more-databases/Normalization, relational-databases/Modelagem e restrições]
+  study:
+    - { label: "Normalização de banco de dados (Microsoft)", url: "https://learn.microsoft.com/pt-br/office/troubleshoot/access/database-normalization-description" }
+  statement: |
+    Hoje cada banda guarda o gênero como texto livre, e já existem `Thrash Metal`, `thrash metal` e `Thrash metal`. Comece a normalização:
+
+    1. crie a tabela `genres`, com `id` inteiro chave primária e `name` texto obrigatório e único, sem diferenciar maiúsculas de minúsculas
+    2. preencha a tabela com os gêneros que existem em `bands`, uma vez cada, com o nome como aparece primeiro na ordem de `id` das bandas
+  check: SELECT name FROM genres ORDER BY name COLLATE NOCASE
+  ordered: true
+  setup: |
+    UPDATE bands SET genre = 'thrash metal' WHERE id = 5;
+    INSERT INTO bands (id, name, country, genre, formed_year) VALUES (50, 'Terremoto', 'Brasil', 'Thrash metal', 2010);
+  rejects:
+    - "INSERT INTO genres (name) VALUES ('BLACK METAL')"
+  solution: |
+    CREATE TABLE genres (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    );
+    INSERT INTO genres (name)
+    SELECT genre FROM bands b
+    WHERE b.id = (SELECT MIN(id) FROM bands x WHERE x.genre = b.genre COLLATE NOCASE)
+    ORDER BY b.id;
+  hints:
+    - "`COLLATE NOCASE` na coluna faz o `UNIQUE` ignorar maiúsculas."
+    - Para escolher a primeira grafia, pegue a banda de menor `id` de cada gênero, comparando sem diferenciar maiúsculas.
+  explanation: |
+    Normalizar é guardar cada fato uma vez: o gênero vira uma tabela, e a banda passa a apontar para ele por chave. A unicidade sem diferenciar maiúsculas impede que as variações voltem. O próximo passo seria acrescentar `genre_id` em `bands` e migrar os dados.
+  traps:
+    - { reason: "DISTINCT diferencia maiúsculas", code: "CREATE TABLE genres (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE); INSERT INTO genres (name) SELECT DISTINCT genre FROM bands;" }
+    - { reason: "Unicidade só na escrita do código", code: "CREATE TABLE genres (id INTEGER PRIMARY KEY, name TEXT NOT NULL); INSERT INTO genres (name) SELECT genre FROM bands b WHERE b.id = (SELECT MIN(id) FROM bands x WHERE x.genre = b.genre COLLATE NOCASE) ORDER BY b.id;" }
+
+- slug: anomalia-de-atualizacao
+  title: O e-mail que mudou em metade das linhas
+  difficulty: facil
+  kind: quiz
+  in: [more-databases/Normalization]
+  study:
+    - { label: "Normalização de banco de dados (Microsoft)", url: "https://learn.microsoft.com/pt-br/office/troubleshoot/access/database-normalization-description" }
+  statement: |
+    A tabela `vendas` guarda, em cada linha, o nome, o e-mail e o telefone do comprador. Uma fã trocou de e-mail, e o suporte atualizou só as vendas deste ano. Agora ela aparece com dois e-mails.
+
+    Qual é a causa?
+  options:
+    - text: Os dados do comprador estão repetidos em cada venda. Com uma tabela de compradores e uma chave nas vendas, o e-mail existiria num lugar só
+      why: Certo. É uma anomalia de atualização, típica de dados não normalizados.
+    - text: O suporte devia ter usado letras maiúsculas
+      why: O problema é a repetição do dado, não a forma de escrever.
+    - text: Faltou um índice na coluna de e-mail
+      why: Índices aceleram buscas, mas não evitam cópias divergentes.
+    - text: O banco devia apagar vendas antigas
+      why: Vendas antigas são histórico valioso. A correção é separar o comprador.
+  answer: 0
+  explanation: |
+    Normalização organiza as tabelas para cada fato ficar em um lugar só, o que evita anomalias de inserção, atualização e remoção. Às vezes se desnormaliza de propósito, para ler mais rápido, mas aí o código precisa manter as cópias sincronizadas.
+
+- slug: indice-para-busca
+  title: Os shows de uma banda, sem varrer a tabela
+  difficulty: facil
+  kind: sql
+  visual: indice
+  in: [scaling-databases/Database Indexes]
+  study:
+    - { label: "Como o planejador do SQLite usa índices", url: "https://www.sqlite.org/queryplanner.html" }
+    - { label: "EXPLAIN QUERY PLAN (SQLite)", url: "https://www.sqlite.org/eqp.html" }
+  statement: |
+    O endpoint `GET /bandas/:id/shows` roda `SELECT * FROM shows WHERE band_id = ?` milhares de vezes por minuto, e o plano de execução mostra `SCAN shows`: o banco lê a tabela inteira a cada pedido.
+
+    Crie o índice que faz essa consulta buscar direto as linhas da banda.
+  plan_of: SELECT * FROM shows WHERE band_id = 1
+  plan_must: [INDEX]
+  plan_forbid: [SCAN shows]
+  check: SELECT COUNT(*) FROM shows
+  solution: |
+    CREATE INDEX idx_shows_band ON shows(band_id);
+  hints:
+    - Um índice na coluna do `WHERE` permite ao banco ir direto às linhas certas.
+  explanation: |
+    Sem índice, o banco lê todas as linhas e filtra, o `SCAN`. Com um índice em `band_id`, ele navega numa árvore ordenada até as linhas da banda, o `SEARCH ... USING INDEX`. Em tabelas grandes, é a diferença entre milissegundos e segundos.
+  traps:
+    - { reason: "Índice na coluna errada", code: "CREATE INDEX idx_shows_venue ON shows(venue_id);" }
+
+- slug: indice-composto
+  title: A ordem das colunas no índice
+  difficulty: dificil
+  kind: sql
+  visual: indice
+  in: [scaling-databases/Database Indexes, more-databases/Profiling Performance]
+  study:
+    - { label: "Índices com várias colunas (SQLite)", url: "https://www.sqlite.org/queryplanner.html#_multi_column_indices" }
+    - { label: "Índices compostos (Use The Index, Luke, em inglês)", url: "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys" }
+  statement: |
+    A agenda de cada local roda `SELECT id FROM shows WHERE venue_id = ? AND show_date >= ? ORDER BY show_date`.
+
+    Crie um único índice que atenda o filtro e a ordenação, sem o banco precisar ordenar o resultado depois. O plano não deve conter `USE TEMP B-TREE`, que indica ordenação extra.
+  plan_of: SELECT id FROM shows WHERE venue_id = 1 AND show_date >= '2026-01-01' ORDER BY show_date
+  plan_must: [INDEX, venue_id=?]
+  plan_forbid: [TEMP B-TREE, SCAN shows]
+  check: SELECT COUNT(*) FROM shows
+  solution: |
+    CREATE INDEX idx_shows_venue_data ON shows(venue_id, show_date);
+  hints:
+    - Num índice composto, a coluna com igualdade vem primeiro, e a de intervalo ou ordenação depois.
+  explanation: |
+    Um índice composto é ordenado pela primeira coluna e, dentro dela, pela segunda. Com `(venue_id, show_date)`, as linhas de um local já estão em ordem de data, então o banco filtra e ordena num só percurso. Com as colunas invertidas, o índice não ajuda a filtrar pelo local.
+  traps:
+    - { reason: "Ordem invertida", code: "CREATE INDEX idx_shows_data_venue ON shows(show_date, venue_id);" }
+    - { reason: "Só a primeira coluna", code: "CREATE INDEX idx_shows_venue ON shows(venue_id);" }
+
+- slug: indice-de-expressao
+  title: A busca por e-mail que ignora o índice
+  difficulty: dificil
+  kind: sql
+  visual: indice
+  in: [scaling-databases/Database Indexes, conserte/Banco de dados]
+  study:
+    - { label: "Índices em expressões (SQLite)", url: "https://www.sqlite.org/expridx.html" }
+  setup: |
+    CREATE INDEX idx_press_email ON press_contacts(email);
+  statement: |
+    O login de jornalistas faz `SELECT id FROM press_contacts WHERE LOWER(email) = ?`. Já existe um índice em `email`, mas o plano continua mostrando `SCAN press_contacts`.
+
+    Crie o índice que essa consulta consegue usar.
+  plan_of: SELECT id FROM press_contacts WHERE LOWER(email) = 'marina@rockpress.com'
+  plan_must: [INDEX]
+  plan_forbid: [SCAN press_contacts]
+  check: SELECT COUNT(*) FROM press_contacts
+  solution: |
+    CREATE INDEX idx_press_email_lower ON press_contacts(LOWER(email));
+  hints:
+    - O índice guarda `email`, mas a consulta procura `LOWER(email)`, que é outro valor.
+    - Dá para indexar o resultado de uma expressão.
+  explanation: |
+    Aplicar uma função à coluna no `WHERE` impede o uso de um índice na coluna pura, porque os valores indexados não são os comparados. A saída é indexar a expressão exata da consulta ou guardar o e-mail já em minúsculas numa coluna própria.
+  traps:
+    - { reason: "Índice na coluna pura de novo", code: "CREATE INDEX idx_press_email2 ON press_contacts(email);" }
+
+- slug: custo-dos-indices
+  title: Um índice em cada coluna
+  difficulty: medio
+  kind: quiz
+  visual: indice
+  in: [scaling-databases/Database Indexes, more-databases/Profiling Performance]
+  study:
+    - { label: "Como o planejador do SQLite usa índices", url: "https://www.sqlite.org/queryplanner.html" }
+  statement: |
+    Para "garantir desempenho", alguém criou um índice em cada uma das 20 colunas da tabela `tickets`. As vendas, que inserem muito, ficaram mais lentas.
+
+    Por quê?
+  options:
+    - text: Cada índice precisa ser atualizado a cada inserção e mudança, e ocupa espaço. Índices devem atender consultas reais, medidas no plano de execução
+      why: Certo. Índices aceleram leituras às custas das escritas. Os que nenhuma consulta usa são só custo.
+    - text: Índices não existem para inserções
+      why: Toda inserção precisa atualizar os índices da tabela, o que é justamente o custo.
+    - text: O banco usa todos os índices em toda consulta
+      why: O planejador escolhe no máximo alguns índices por consulta, conforme as condições.
+    - text: Vinte índices é o limite, e passar dele trava o banco
+      why: O limite é bem maior. O problema é o custo, não um limite.
+  answer: 0
+  explanation: |
+    Um índice é uma estrutura extra, ordenada, que precisa ficar em dia com a tabela. Crie índices a partir das consultas que importam, confira com `EXPLAIN`, e remova os que não são usados. Bancos como o PostgreSQL mostram quantas vezes cada índice foi lido.
+
+- slug: replica-atrasada
+  title: Atualizei o perfil e ele voltou ao antigo
+  difficulty: medio
+  kind: quiz
+  visual: cluster-3d
+  in: [scaling-databases/Data Replication]
+  study:
+    - { label: "Replicação (PostgreSQL)", url: "https://www.postgresql.org/docs/current/high-availability.html" }
+  statement: |
+    As leituras da API vão para réplicas, e as escritas vão para o banco principal. Uma fã troca a foto do perfil, recarrega a página e vê a foto antiga. Um minuto depois, aparece a nova.
+
+    O que acontece e como contornar?
+  options:
+    - text: A réplica recebe as mudanças com atraso. Para quem acabou de escrever, leia do principal por um tempo, o read-your-writes, ou espere a réplica alcançar a posição da escrita
+      why: Certo. Replicação assíncrona é eventualmente consistente, e a experiência de quem escreveu precisa de cuidado especial.
+    - text: A réplica perdeu os dados
+      why: Ela não perdeu, só ainda não recebeu. Um minuto depois a foto nova aparece.
+    - text: O navegador está com defeito
+      why: O pedido chegou ao servidor, que leu de uma réplica atrasada.
+    - text: Deve-se gravar em todas as réplicas ao mesmo tempo pelo código
+      why: Gravar em várias cópias pelo código cria inconsistências quando uma delas falha.
+  answer: 0
+  explanation: |
+    Réplicas multiplicam a capacidade de leitura e servem de reserva se o principal cair. Na replicação assíncrona, a réplica fica alguns milissegundos ou segundos atrás. Para dados que a pessoa acabou de alterar, leia do principal ou use replicação síncrona, que é mais lenta.
+
+- slug: chave-do-shard
+  title: O shard que recebe tudo
+  difficulty: dificil
+  kind: quiz
+  visual: cluster-3d
+  in: [scaling-databases/Sharding Strategies]
+  statement: |
+    A tabela de check-ins foi dividida em 8 bancos pela data: cada shard guarda um período. No dia do festival, todas as escritas vão para o mesmo shard, que fica sobrecarregado, enquanto os outros 7 ficam ociosos.
+
+    Qual escolha de chave distribui melhor a carga?
+  study:
+    - { label: "Sharding (MongoDB)", url: "https://www.mongodb.com/docs/manual/sharding/" }
+  options:
+    - text: Um hash do `ticket_id`, que espalha os ingressos de forma uniforme entre os shards, e cada consulta por ingresso vai a um shard só
+      why: Certo. A chave precisa distribuir as escritas e combinar com as consultas mais comuns.
+    - text: Manter a data, mas com 16 shards
+      why: No dia do festival, as escritas continuam indo todas para o mesmo período.
+    - text: O nome do portão, que só tem 4 valores
+      why: Com poucos valores, só 4 shards recebem dados, e um portão movimentado vira gargalo.
+    - text: Sortear o shard a cada escrita
+      why: Distribui as escritas, mas para achar um ingresso seria preciso consultar todos os shards.
+  answer: 0
+  explanation: |
+    Sharding divide os dados entre bancos para escalar as escritas. A chave define para onde cada linha vai. Ela precisa ter muitos valores, distribuir a carga ao longo do tempo e permitir que as consultas comuns caiam num shard só. Chaves crescentes, como datas e ids sequenciais, concentram as escritas no último shard.
+
+- slug: teorema-cap
+  title: A rede caiu entre os dois datacenters
+  difficulty: dificil
+  kind: quiz
+  visual: cluster-3d
+  in: [scaling-databases/CAP Theorem, scaling-databases/Data Replication]
+  study:
+    - { label: "Teorema CAP (IBM)", url: "https://www.ibm.com/br-pt/think/topics/cap-theorem" }
+  statement: |
+    O banco de ingressos roda em dois datacenters, com cópias sincronizadas. A ligação entre eles cai por 10 minutos, e os dois lados continuam recebendo pedidos de compra.
+
+    O que o teorema CAP diz sobre essa situação?
+  options:
+    - text: Durante a partição, cada lado precisa escolher entre recusar pedidos, para não divergir, ou aceitar e reconciliar depois, perdendo consistência
+      why: Certo. Com a rede partida, não dá para ter consistência e disponibilidade ao mesmo tempo. Para ingressos numerados, recusar costuma ser a escolha certa.
+    - text: Os dois lados podem continuar vendendo sem nenhum risco
+      why: Os dois lados poderiam vender o mesmo lugar, porque não conseguem conversar.
+    - text: O teorema diz que bancos distribuídos sempre perdem dados
+      why: Ele fala de escolhas durante partições, não de perda inevitável.
+    - text: Basta aumentar o tempo limite da conexão
+      why: A partição pode durar mais que qualquer tempo limite, e a escolha continua necessária.
+  answer: 0
+  explanation: |
+    CAP diz que, numa partição de rede, um sistema distribuído escolhe entre consistência, recusando o que não pode confirmar, e disponibilidade, aceitando e resolvendo conflitos depois. Fora das partições, a troca do dia a dia é entre latência e consistência.
+
+- slug: conserte-contagem-com-left-join
+  title: A banda sem show aparece com 1
+  difficulty: medio
+  kind: sql
+  in: [conserte/Banco de dados, relational-databases/Joins e agregações]
+  study:
+    - { label: "COUNT e NULL (SQLite)", url: "https://www.sqlite.org/lang_aggfunc.html#count" }
+  starter: |
+    SELECT b.name, COUNT(*) AS shows
+    FROM bands b
+    LEFT JOIN shows s ON s.band_id = b.id
+    GROUP BY b.id
+    ORDER BY b.name;
+  statement: |
+    O relatório de shows por banda mostra 1 show para bandas que não têm nenhum. Corrija a consulta: bandas sem show devem aparecer com 0.
+  ordered: true
+  solution: |
+    SELECT b.name, COUNT(s.id) AS shows
+    FROM bands b
+    LEFT JOIN shows s ON s.band_id = b.id
+    GROUP BY b.id
+    ORDER BY b.name;
+  hints:
+    - "`COUNT(*)` conta linhas, inclusive a linha do `LEFT JOIN` que veio sem show."
+    - "`COUNT(coluna)` ignora `NULL`."
+  explanation: |
+    No `LEFT JOIN`, uma banda sem show ainda gera uma linha, com as colunas de `shows` em `NULL`. `COUNT(*)` conta essa linha. `COUNT(s.id)` conta só valores não nulos, que é o número real de shows.
+  traps:
+    - { reason: "JOIN tira as bandas sem show", code: "SELECT b.name, COUNT(s.id) AS shows FROM bands b JOIN shows s ON s.band_id = b.id GROUP BY b.id ORDER BY b.name;" }
+
+- slug: implemente-coluna-de-faturamento
+  title: O relatório mensal com faturamento
+  difficulty: medio
+  kind: sql
+  in: [implemente/Banco de dados, relational-databases/Joins e agregações]
+  study:
+    - { label: "Subconsultas e agregações (SQLite)", url: "https://www.sqlite.org/lang_select.html" }
+  starter: |
+    SELECT substr(show_date, 1, 7) AS mes, COUNT(*) AS shows
+    FROM shows
+    GROUP BY mes
+    ORDER BY mes;
+  statement: |
+    O relatório mensal já mostra quantos shows há em cada mês. Acrescente a coluna `faturamento`: a soma de `ticket_price * quantity` dos ingressos pagos dos shows do mês, com 0 nos meses sem venda paga.
+
+    A contagem de shows precisa continuar certa. Cuidado: juntar com `tickets` multiplica as linhas dos shows.
+  ordered: true
+  solution: |
+    SELECT substr(s.show_date, 1, 7) AS mes,
+           COUNT(*) AS shows,
+           COALESCE(SUM(s.ticket_price * t.vendidos), 0) AS faturamento
+    FROM shows s
+    LEFT JOIN (
+      SELECT show_id, SUM(quantity) AS vendidos
+      FROM tickets WHERE status = 'pago'
+      GROUP BY show_id
+    ) t ON t.show_id = s.id
+    GROUP BY mes
+    ORDER BY mes;
+  hints:
+    - Some os ingressos por show numa subconsulta primeiro. Assim, cada show continua sendo uma linha só no join.
+  explanation: |
+    Juntar uma tabela de shows com várias vendas por show multiplica as linhas, e o `COUNT(*)` passa a contar vendas. Agregar as vendas por show numa subconsulta antes do join mantém uma linha por show, e as duas métricas ficam certas.
+  traps:
+    - { reason: "Join direto multiplica a contagem", code: "SELECT substr(s.show_date, 1, 7) AS mes, COUNT(*) AS shows, COALESCE(SUM(s.ticket_price * t.quantity), 0) AS faturamento FROM shows s LEFT JOIN tickets t ON t.show_id = s.id AND t.status = 'pago' GROUP BY mes ORDER BY mes;" }

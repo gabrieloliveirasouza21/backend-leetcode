@@ -1,0 +1,1365 @@
+- slug: ler-basic-auth
+  title: O cabeçalho do painel da produção
+  difficulty: medio
+  kind: js
+  in: [apis/Basic Authentication, apis/Authentication]
+  study:
+    - { label: "Autenticação HTTP (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication" }
+    - { label: "RFC 7617: o esquema Basic", url: "https://www.rfc-editor.org/rfc/rfc7617" }
+    - { label: "TextDecoder (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/API/TextDecoder" }
+  statement: |
+    O painel interno da produção usa Basic Authentication. O navegador manda `Authorization: Basic <base64 de usuario:senha>`.
+
+    Escreva `lerBasic(cabecalho)`, que devolve `{ usuario, senha }` ou `null` quando o cabeçalho não for um Basic válido:
+
+    - o nome do esquema não diferencia maiúsculas: `basic` também vale
+    - a senha pode conter `:`. Só o primeiro `:` separa usuário e senha
+    - o texto decodificado é UTF-8, então `joão` precisa voltar como `joão`
+    - base64 inválido, ausência de `:` ou cabeçalho ausente dão `null`
+  solution: |
+    function lerBasic(cabecalho) {
+      if (typeof cabecalho !== 'string') return null;
+      const partes = /^basic\s+(\S+)$/i.exec(cabecalho.trim());
+      if (!partes) return null;
+      let bytes;
+      try {
+        bytes = Uint8Array.from(atob(partes[1]), (c) => c.charCodeAt(0));
+      } catch {
+        return null;
+      }
+      const texto = new TextDecoder().decode(bytes);
+      const i = texto.indexOf(':');
+      if (i < 0) return null;
+      return { usuario: texto.slice(0, i), senha: texto.slice(i + 1) };
+    }
+  tests:
+    - name: lê usuário e senha
+      code: |
+        expect(lerBasic('Basic ' + btoa('produtor:metal123'))).toEqual({ usuario: 'produtor', senha: 'metal123' });
+    - name: outro esquema não vale
+      code: |
+        expect(lerBasic('Bearer abc.def')).toBe(null);
+        expect(lerBasic(undefined)).toBe(null);
+    - name: senha com dois-pontos
+      hidden: true
+      code: |
+        expect(lerBasic('Basic ' + btoa('ana:a:b:c'))).toEqual({ usuario: 'ana', senha: 'a:b:c' });
+    - name: esquema em minúsculas
+      hidden: true
+      code: |
+        expect(lerBasic('basic ' + btoa('x:y'))).toEqual({ usuario: 'x', senha: 'y' });
+    - name: texto em UTF-8
+      hidden: true
+      code: |
+        const b64 = btoa(String.fromCharCode(...new TextEncoder().encode('joão:sênha')));
+        expect(lerBasic('Basic ' + b64)).toEqual({ usuario: 'joão', senha: 'sênha' });
+    - name: entradas inválidas
+      hidden: true
+      code: |
+        expect(lerBasic('Basic %%%')).toBe(null);
+        expect(lerBasic('Basic ' + btoa('semdoispontos'))).toBe(null);
+  hints:
+    - "`atob` decodifica base64 para uma string em que cada caractere é um byte."
+    - Para ler UTF-8, transforme esses caracteres em bytes e use `new TextDecoder().decode(bytes)`.
+    - "`indexOf(':')` acha só o primeiro separador."
+  explanation: |
+    Basic Authentication manda usuário e senha em base64 a cada pedido. Base64 é só uma codificação, qualquer pessoa decodifica, então esse esquema só é aceitável sobre HTTPS. A RFC 7617 define que o usuário não pode ter `:`, mas a senha pode, por isso só o primeiro separa os dois.
+  traps:
+    - reason: split corta a senha que tem dois-pontos
+      code: |
+        function lerBasic(c) {
+          const m = /^basic\s+(\S+)$/i.exec(String(c ?? ''));
+          if (!m) return null;
+          try {
+            const [usuario, senha] = new TextDecoder().decode(Uint8Array.from(atob(m[1]), (x) => x.charCodeAt(0))).split(':');
+            return senha === undefined ? null : { usuario, senha };
+          } catch { return null; }
+        }
+    - reason: Ignora o UTF-8
+      code: |
+        function lerBasic(c) {
+          const m = /^basic\s+(\S+)$/i.exec(String(c ?? ''));
+          if (!m) return null;
+          try {
+            const t = atob(m[1]);
+            const i = t.indexOf(':');
+            return i < 0 ? null : { usuario: t.slice(0, i), senha: t.slice(i + 1) };
+          } catch { return null; }
+        }
+
+- slug: basic-sem-https
+  title: Base64 não é criptografia
+  difficulty: facil
+  kind: quiz
+  in: [apis/Basic Authentication, web-security/HTTPS]
+  study:
+    - { label: "Autenticação HTTP (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication" }
+  statement: |
+    Um colega diz que o painel com Basic Authentication está seguro mesmo em HTTP, porque a senha vai "codificada em base64".
+
+    O que responder?
+  options:
+    - text: Base64 é reversível por qualquer pessoa. Sem HTTPS, quem enxerga o tráfego lê a senha. Basic só é aceitável sobre TLS
+      why: Certo. Base64 transforma bytes em texto, sem chave e sem segredo.
+    - text: Está seguro, porque base64 é um tipo de hash
+      why: Hash não volta ao original. Base64 volta, com um comando.
+    - text: Está seguro se a senha for longa
+      why: O tamanho não importa quando a senha trafega legível.
+    - text: Basta trocar base64 por base32
+      why: Qualquer codificação sem chave é igualmente legível.
+  answer: 0
+  explanation: |
+    Codificar não é cifrar. Base64 existe para transportar bytes como texto. A proteção da senha no caminho vem do TLS, e no servidor vem de guardar só o hash da senha, com um algoritmo lento como bcrypt.
+
+- slug: quatrocentos-e-um-ou-tres
+  title: Sem login ou sem permissão
+  difficulty: facil
+  kind: js
+  visual: requisicao
+  in: [apis/Basic Authentication, apis/Authentication]
+  study:
+    - { label: "401 Unauthorized (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401" }
+    - { label: "403 Forbidden (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403" }
+  statement: |
+    A rota `GET /camarim` só é liberada para quem tem o papel `producao`. Um middleware anterior já leu as credenciais e preencheu `req.usuario`, com `null` quando ninguém fez login.
+
+    Escreva `autorizar(req)`, que devolve `{ status, headers, body }`:
+
+    - sem usuário: `401`, com o cabeçalho `www-authenticate` valendo `Basic realm="producao"`
+    - com usuário, mas sem o papel `producao`: `403`
+    - com o papel certo: `200` e `body` igual a `{ camarim: 'liberado' }`
+  solution: |
+    function autorizar(req) {
+      if (!req.usuario) {
+        return { status: 401, headers: { 'www-authenticate': 'Basic realm="producao"' }, body: { erro: 'faça login' } };
+      }
+      if (req.usuario.papel !== 'producao') return { status: 403, headers: {}, body: { erro: 'sem permissão' } };
+      return { status: 200, headers: {}, body: { camarim: 'liberado' } };
+    }
+  tests:
+    - name: sem login
+      code: |
+        const r = autorizar({ usuario: null });
+        expect(r.status).toBe(401);
+        expect(r.headers['www-authenticate']).toBe('Basic realm="producao"');
+    - name: com o papel certo
+      code: |
+        const r = autorizar({ usuario: { nome: 'Rita', papel: 'producao' } });
+        expect(r.status).toBe(200);
+        expect(r.body).toEqual({ camarim: 'liberado' });
+    - name: sem permissão
+      hidden: true
+      code: |
+        expect(autorizar({ usuario: { nome: 'Leo', papel: 'imprensa' } }).status).toBe(403);
+    - name: usuário ausente
+      hidden: true
+      code: |
+        expect(autorizar({}).status).toBe(401);
+  hints:
+    - 401 quer dizer "não sei quem você é". 403 quer dizer "sei quem você é, e a resposta é não".
+  explanation: |
+    O nome oficial do 401 é "Unauthorized", mas ele trata de autenticação: faltam credenciais válidas, e o cabeçalho `WWW-Authenticate` diz como se autenticar. O 403 trata de autorização: a pessoa é conhecida, mas não pode. Trocar os dois confunde clientes, que tentam logar de novo em vez de mostrar "sem acesso".
+  traps:
+    - reason: 403 para quem não fez login
+      code: |
+        function autorizar(req) {
+          if (!req.usuario || req.usuario.papel !== 'producao') return { status: 403, headers: {}, body: {} };
+          return { status: 200, headers: {}, body: { camarim: 'liberado' } };
+        }
+    - reason: 401 para quem não tem o papel
+      code: |
+        function autorizar(req) {
+          if (!req.usuario || req.usuario.papel !== 'producao') return { status: 401, headers: { 'www-authenticate': 'Basic realm="producao"' }, body: {} };
+          return { status: 200, headers: {}, body: { camarim: 'liberado' } };
+        }
+
+- slug: envelope-soap
+  title: O gateway de pagamento de 2008
+  difficulty: facil
+  kind: quiz
+  in: [apis/SOAP]
+  study:
+    - { label: "SOAP (Wikipédia)", url: "https://pt.wikipedia.org/wiki/SOAP" }
+    - { label: "SOAP 1.2, parte 1 (W3C, em inglês)", url: "https://www.w3.org/TR/soap12-part1/" }
+  statement: |
+    O festival precisa integrar com o gateway de pagamento de um banco. A documentação fala em `Envelope`, `Body`, `Fault` e manda tudo por `POST` em XML.
+
+    O que é esse serviço?
+  options:
+    - text: Uma API SOAP, um protocolo em XML em que cada chamada é uma mensagem num envelope, e os erros vêm num elemento Fault
+      why: Certo. SOAP ainda é comum em bancos, governos e sistemas corporativos antigos.
+    - text: Uma API REST com JSON
+      why: REST usa os métodos e status do HTTP sobre recursos, e normalmente JSON. Envelope e Fault são termos do SOAP.
+    - text: Uma API GraphQL
+      why: GraphQL usa uma linguagem de consulta própria, e responde em JSON.
+    - text: Um WebSocket
+      why: WebSocket é um canal bidirecional, sem envelope XML.
+  answer: 0
+  explanation: |
+    SOAP define mensagens XML com um `Envelope`, um `Header` opcional e um `Body`. O transporte costuma ser HTTP `POST` para um único endereço, e a operação vai dentro da mensagem. Bibliotecas geram o cliente a partir do contrato WSDL, então quase ninguém escreve o XML à mão.
+
+- slug: contrato-wsdl
+  title: O arquivo que descreve o serviço
+  difficulty: medio
+  kind: quiz
+  in: [apis/SOAP, apis/Open API Specs]
+  study:
+    - { label: "WSDL (Wikipédia)", url: "https://pt.wikipedia.org/wiki/Web_Services_Description_Language" }
+  statement: |
+    O banco mandou um arquivo `pagamentos.wsdl`. A pessoa que cuida da integração pergunta para que ele serve.
+
+    Qual resposta está certa?
+  options:
+    - text: É o contrato do serviço SOAP, com as operações, os tipos das mensagens e o endereço. Ferramentas geram o cliente a partir dele, como o OpenAPI faz para REST
+      why: Certo. WSDL descreve o serviço em XML, e o cliente gerado já sabe montar os envelopes.
+    - text: É a chave de criptografia do banco
+      why: Chaves e certificados são outros arquivos. O WSDL só descreve a interface.
+    - text: É um log das chamadas já feitas
+      why: Ele descreve o que dá para chamar, não o que foi chamado.
+    - text: É o banco de dados do gateway
+      why: Ele não contém dados, só a definição das operações.
+  answer: 0
+  explanation: |
+    Contratos legíveis por máquina, como WSDL no SOAP, OpenAPI no REST e arquivos `.proto` no gRPC, permitem gerar clientes, validar mensagens e documentar a API a partir de uma fonte só.
+
+- slug: varint-do-protobuf
+  title: Como o gRPC escreve um número
+  difficulty: medio
+  kind: js
+  in: [apis/gRPC]
+  study:
+    - { label: "Codificação do Protocol Buffers (em inglês)", url: "https://protobuf.dev/programming-guides/encoding/" }
+  statement: |
+    O gRPC manda as mensagens em Protocol Buffers, um formato binário. Inteiros viram varints: o número é cortado em grupos de 7 bits, do menos significativo para o mais significativo. Cada grupo vira um byte, e o bit mais alto do byte, `128`, vale 1 quando ainda há bytes depois.
+
+    Escreva `varint(n)`, que recebe um inteiro não negativo e devolve o array de bytes. Por exemplo, `300` vira `[172, 2]`. O número pode passar de 2³², então não use operadores de bits, que trabalham com 32 bits.
+  solution: |
+    function varint(n) {
+      const bytes = [];
+      do {
+        let byte = n % 128;
+        n = Math.floor(n / 128);
+        if (n > 0) byte += 128;
+        bytes.push(byte);
+      } while (n > 0);
+      return bytes;
+    }
+  tests:
+    - name: números pequenos cabem num byte
+      code: |
+        expect(varint(1)).toEqual([1]);
+        expect(varint(127)).toEqual([127]);
+    - name: "300"
+      code: |
+        expect(varint(300)).toEqual([172, 2]);
+    - name: zero
+      hidden: true
+      code: |
+        expect(varint(0)).toEqual([0]);
+    - name: "128"
+      hidden: true
+      code: |
+        expect(varint(128)).toEqual([128, 1]);
+    - name: acima de 32 bits
+      hidden: true
+      code: |
+        expect(varint(2 ** 32)).toEqual([128, 128, 128, 128, 16]);
+  hints:
+    - "`n % 128` dá os 7 bits de baixo, e `Math.floor(n / 128)` tira esses bits."
+    - O zero ainda ocupa um byte. Um `do ... while` garante isso.
+  explanation: |
+    Varints gastam poucos bytes com números pequenos, que são os mais comuns, e é um dos motivos de o Protocol Buffers ser menor que JSON. Operadores de bits em JavaScript convertem para 32 bits, então números grandes precisam de aritmética comum ou de `BigInt`.
+  traps:
+    - reason: Operadores de bits quebram acima de 32 bits
+      code: |
+        function varint(n) {
+          const bytes = [];
+          do { let b = n & 127; n >>>= 7; if (n) b |= 128; bytes.push(b); } while (n);
+          return bytes;
+        }
+    - reason: Bytes na ordem inversa
+      code: |
+        function varint(n) {
+          const grupos = [];
+          do { grupos.unshift(n % 128); n = Math.floor(n / 128); } while (n > 0);
+          return grupos.map((g, i) => (i < grupos.length - 1 ? g + 128 : g));
+        }
+    - reason: Zero vira um array vazio
+      code: |
+        function varint(n) {
+          const bytes = [];
+          while (n > 0) { let b = n % 128; n = Math.floor(n / 128); if (n > 0) b += 128; bytes.push(b); }
+          return bytes;
+        }
+
+- slug: prazo-no-grpc
+  title: A chamada que esperou para sempre
+  difficulty: medio
+  kind: quiz
+  visual: disjuntor
+  in: [apis/gRPC, building-for-scale/Graceful Degradation]
+  study:
+    - { label: "Deadlines no gRPC (em inglês)", url: "https://grpc.io/docs/guides/deadlines/" }
+    - { label: "Códigos de status do gRPC (em inglês)", url: "https://grpc.io/docs/guides/status-codes/" }
+  statement: |
+    O serviço de ingressos chama o de pagamentos por gRPC, que chama o antifraude. O antifraude travou, e as chamadas do serviço de ingressos ficaram penduradas até esgotar as conexões.
+
+    O que o gRPC oferece para isso?
+  options:
+    - text: Um deadline em cada chamada, que se propaga para as chamadas seguintes. Quando o prazo acaba, todas falham com DEADLINE_EXCEEDED e liberam os recursos
+      why: Certo. Sem deadline, uma chamada gRPC pode esperar indefinidamente.
+    - text: Nada. É preciso reiniciar os servidores
+      why: Reiniciar trata o sintoma. O deadline evita que a espera se acumule.
+    - text: Trocar para REST resolve, porque HTTP tem tempo limite automático
+      why: Clientes HTTP também podem esperar indefinidamente sem um tempo limite configurado.
+    - text: Aumentar o número de conexões
+      why: Mais conexões penduradas só adiam o problema.
+  answer: 0
+  explanation: |
+    Em gRPC, o cliente define um prazo absoluto, e as bibliotecas repassam o tempo restante para as chamadas que o servidor faz em seguida. Assim, uma cadeia de serviços desiste junto, em vez de cada um esperar o próprio tempo limite.
+
+- slug: grpc-ou-rest
+  title: Onde o gRPC faz sentido
+  difficulty: medio
+  kind: quiz
+  in: [apis/gRPC, apis/REST]
+  study:
+    - { label: "Introdução ao gRPC (em inglês)", url: "https://grpc.io/docs/what-is-grpc/introduction/" }
+  statement: |
+    O festival tem uma API pública, usada pelo app e por parceiros, e uma dezena de serviços internos que conversam entre si milhares de vezes por segundo.
+
+    Onde o gRPC combina melhor?
+  options:
+    - text: Entre os serviços internos, com contrato em .proto, mensagens binárias e HTTP/2. Na API pública, REST com JSON é mais fácil para parceiros e navegadores
+      why: Certo. Navegadores não falam gRPC diretamente, e precisam de gRPC-Web e de um proxy.
+    - text: Só na API pública, porque navegadores falam gRPC nativamente
+      why: Navegadores não expõem o controle de HTTP/2 que o gRPC precisa.
+    - text: Em nenhum lugar, porque gRPC é só para jogos
+      why: gRPC é muito usado entre microsserviços.
+    - text: Nos dois, porque JSON está obsoleto
+      why: JSON continua sendo o formato mais compatível para APIs públicas.
+  answer: 0
+  explanation: |
+    gRPC traz contratos fortes, código gerado em várias linguagens, streaming e mensagens compactas. Em troca, é menos legível e precisa de ferramentas para depurar. APIs públicas costumam ficar em REST ou GraphQL.
+
+- slug: validar-com-esquema
+  title: O corpo do pedido contra o contrato
+  difficulty: dificil
+  kind: js
+  in: [apis/Open API Specs, apis/JSON APIs]
+  study:
+    - { label: "Tipos de dados no OpenAPI (Swagger, em inglês)", url: "https://swagger.io/docs/specification/v3_0/data-models/data-types/" }
+    - { label: "JSON Schema: type (em inglês)", url: "https://json-schema.org/understanding-json-schema/reference/type" }
+  statement: |
+    O contrato OpenAPI da rota `POST /pedidos` descreve o corpo com um esquema. Escreva `validar(esquema, valor)`, que devolve a lista de caminhos inválidos, como `['$.quantidade']`, ou `[]` quando está tudo certo. A raiz é `$`.
+
+    Suporte estas palavras do esquema:
+
+    - `type`: `object`, `array`, `string`, `integer`, `number` ou `boolean`. Arrays e `null` não são `object`
+    - `required`: propriedades obrigatórias de um objeto. Cada uma que falta gera o caminho dela, como `$.show_id`
+    - `properties`: o esquema de cada propriedade, validado quando ela existe
+    - `items`: o esquema de cada item de um array, com caminhos como `$.assentos[1]`
+    - `minimum` e `enum`
+
+    Quando um valor tem tipo, `enum` ou `minimum` errado, só o caminho dele entra na lista, sem olhar o que há dentro. A ordem da lista não importa.
+  solution: |
+    function validar(esquema, valor, caminho = '$') {
+      const tipos = {
+        object: (v) => typeof v === 'object' && v !== null && !Array.isArray(v),
+        array: Array.isArray,
+        string: (v) => typeof v === 'string',
+        integer: Number.isInteger,
+        number: (v) => typeof v === 'number' && Number.isFinite(v),
+        boolean: (v) => typeof v === 'boolean',
+      };
+      if (esquema.type && !tipos[esquema.type](valor)) return [caminho];
+      if (esquema.enum && !esquema.enum.includes(valor)) return [caminho];
+      if (esquema.minimum !== undefined && valor < esquema.minimum) return [caminho];
+      const erros = [];
+      if (esquema.type === 'object') {
+        for (const nome of esquema.required ?? []) if (!Object.hasOwn(valor, nome)) erros.push(`${caminho}.${nome}`);
+        for (const [nome, sub] of Object.entries(esquema.properties ?? {})) {
+          if (Object.hasOwn(valor, nome)) erros.push(...validar(sub, valor[nome], `${caminho}.${nome}`));
+        }
+      }
+      if (esquema.type === 'array' && esquema.items) {
+        valor.forEach((item, i) => erros.push(...validar(esquema.items, item, `${caminho}[${i}]`)));
+      }
+      return erros;
+    }
+  tests:
+    - name: pedido válido
+      code: |
+        const esquema = {
+          type: 'object', required: ['show_id', 'quantidade'],
+          properties: { show_id: { type: 'integer' }, quantidade: { type: 'integer', minimum: 1 } },
+        };
+        expect(validar(esquema, { show_id: 3, quantidade: 2 })).toEqual([]);
+    - name: campo obrigatório e mínimo
+      code: |
+        const esquema = {
+          type: 'object', required: ['show_id', 'quantidade'],
+          properties: { show_id: { type: 'integer' }, quantidade: { type: 'integer', minimum: 1 } },
+        };
+        expect(validar(esquema, { quantidade: 0 }).sort()).toEqual(['$.quantidade', '$.show_id']);
+    - name: integer não aceita fração
+      hidden: true
+      code: |
+        expect(validar({ type: 'integer' }, 2.5)).toEqual(['$']);
+        expect(validar({ type: 'number' }, 2.5)).toEqual([]);
+    - name: "null e arrays não são object"
+      hidden: true
+      code: |
+        expect(validar({ type: 'object' }, null)).toEqual(['$']);
+        expect(validar({ type: 'object' }, [])).toEqual(['$']);
+    - name: itens de array e enum
+      hidden: true
+      code: |
+        const esquema = {
+          type: 'object',
+          properties: {
+            setor: { type: 'string', enum: ['pista', 'camarote'] },
+            assentos: { type: 'array', items: { type: 'integer', minimum: 1 } },
+          },
+        };
+        expect(validar(esquema, { setor: 'vip', assentos: [4, 0, 'x'] }).sort()).toEqual(['$.assentos[1]', '$.assentos[2]', '$.setor']);
+    - name: tipo errado não olha dentro
+      hidden: true
+      code: |
+        const esquema = { type: 'object', required: ['a'], properties: { a: { type: 'object', required: ['b'] } } };
+        expect(validar(esquema, { a: 'texto' })).toEqual(['$.a']);
+  hints:
+    - Escreva uma função para cada tipo. A de `object` precisa recusar `null` e arrays.
+    - A função chama a si mesma para cada propriedade e cada item, com o caminho acrescido.
+  explanation: |
+    OpenAPI descreve os corpos com JSON Schema. Validar a entrada contra o contrato, na borda da API, garante mensagens de erro consistentes e evita que dados malformados cheguem à regra de negócio. Bibliotecas como Ajv fazem isso de verdade, com muitas outras palavras do esquema.
+  traps:
+    - reason: typeof aceita null e arrays como object
+      code: |
+        function validar(e, v, c = '$') {
+          const ok = { object: (x) => typeof x === 'object', array: Array.isArray, string: (x) => typeof x === 'string', integer: Number.isInteger, number: (x) => typeof x === 'number', boolean: (x) => typeof x === 'boolean' };
+          if (e.type && !ok[e.type](v)) return [c];
+          if (e.enum && !e.enum.includes(v)) return [c];
+          if (e.minimum !== undefined && v < e.minimum) return [c];
+          const r = [];
+          if (e.type === 'object' && v) {
+            for (const n of e.required ?? []) if (!(n in v)) r.push(`${c}.${n}`);
+            for (const [n, s] of Object.entries(e.properties ?? {})) if (n in v) r.push(...validar(s, v[n], `${c}.${n}`));
+          }
+          if (e.type === 'array' && e.items) v.forEach((x, i) => r.push(...validar(e.items, x, `${c}[${i}]`)));
+          return r;
+        }
+    - reason: integer aceita fração
+      code: |
+        function validar(e, v, c = '$') {
+          const ok = { object: (x) => typeof x === 'object' && x !== null && !Array.isArray(x), array: Array.isArray, string: (x) => typeof x === 'string', integer: (x) => typeof x === 'number', number: (x) => typeof x === 'number', boolean: (x) => typeof x === 'boolean' };
+          if (e.type && !ok[e.type](v)) return [c];
+          if (e.enum && !e.enum.includes(v)) return [c];
+          if (e.minimum !== undefined && v < e.minimum) return [c];
+          const r = [];
+          if (e.type === 'object') {
+            for (const n of e.required ?? []) if (!(n in v)) r.push(`${c}.${n}`);
+            for (const [n, s] of Object.entries(e.properties ?? {})) if (n in v) r.push(...validar(s, v[n], `${c}.${n}`));
+          }
+          if (e.type === 'array' && e.items) v.forEach((x, i) => r.push(...validar(e.items, x, `${c}[${i}]`)));
+          return r;
+        }
+
+- slug: contrato-primeiro
+  title: O app e a API em paralelo
+  difficulty: facil
+  kind: quiz
+  in: [apis/Open API Specs]
+  study:
+    - { label: "Especificação OpenAPI 3.1 (em inglês)", url: "https://spec.openapis.org/oas/v3.1.0" }
+  statement: |
+    O time do app quer começar as telas de compra hoje, mas a API de pedidos só fica pronta em duas semanas.
+
+    Como o OpenAPI ajuda?
+  options:
+    - text: Os dois times fecham o contrato OpenAPI primeiro. O app trabalha contra um servidor simulado gerado do contrato, e a API é testada contra o mesmo contrato
+      why: Certo. É o desenvolvimento orientado a contrato, ou contract-first.
+    - text: O OpenAPI escreve a API sozinho
+      why: Ele gera esqueletos e clientes, mas a regra de negócio continua sendo escrita por alguém.
+    - text: Não ajuda, porque OpenAPI é só uma página de documentação
+      why: A documentação é uma das saídas. O contrato também serve para validar, simular e gerar código.
+    - text: O app deve esperar a API ficar pronta
+      why: Com o contrato fechado, a espera é desnecessária.
+  answer: 0
+  explanation: |
+    Um documento OpenAPI descreve rotas, parâmetros, corpos e respostas em YAML ou JSON. A partir dele dá para gerar documentação, clientes em várias linguagens, servidores simulados e testes de conformidade.
+
+- slug: conferir-id-token
+  title: O login com a conta do festival
+  difficulty: dificil
+  kind: js
+  in: [apis/OpenID, apis/OAuth]
+  study:
+    - { label: "Validação do ID Token (OpenID Connect Core, em inglês)", url: "https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation" }
+    - { label: "Como o OpenID Connect funciona (em inglês)", url: "https://openid.net/developers/how-connect-works/" }
+  statement: |
+    O app de parceiros faz login com OpenID Connect. A assinatura do ID Token já foi conferida por uma biblioteca, e você recebe as `claims` decodificadas.
+
+    Escreva `conferirIdToken(claims, { emissor, clienteId, nonce, agora })`, que devolve `null` quando o token vale ou o primeiro problema, nesta ordem:
+
+    1. `'emissor'`: `iss` diferente de `emissor`
+    2. `'audiencia'`: `aud` não contém `clienteId`. `aud` pode ser texto ou array
+    3. `'expirado'`: `exp`, em segundos, é menor ou igual a `agora`
+    4. `'nonce'`: `nonce` diferente do que o app gerou
+  solution: |
+    function conferirIdToken(claims, { emissor, clienteId, nonce, agora }) {
+      if (claims.iss !== emissor) return 'emissor';
+      const audiencia = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+      if (!audiencia.includes(clienteId)) return 'audiencia';
+      if (typeof claims.exp !== 'number' || claims.exp <= agora) return 'expirado';
+      if (claims.nonce !== nonce) return 'nonce';
+      return null;
+    }
+  tests:
+    - name: token válido
+      code: |
+        const ctx = { emissor: 'https://login.festival.com', clienteId: 'app-parceiros', nonce: 'n1', agora: 1000 };
+        expect(conferirIdToken({ iss: 'https://login.festival.com', aud: 'app-parceiros', exp: 1600, nonce: 'n1' }, ctx)).toBe(null);
+    - name: emissor errado
+      code: |
+        const ctx = { emissor: 'https://login.festival.com', clienteId: 'app-parceiros', nonce: 'n1', agora: 1000 };
+        expect(conferirIdToken({ iss: 'https://evil.com', aud: 'app-parceiros', exp: 1600, nonce: 'n1' }, ctx)).toBe('emissor');
+    - name: audiência em array
+      hidden: true
+      code: |
+        const ctx = { emissor: 'e', clienteId: 'app', nonce: 'n', agora: 10 };
+        expect(conferirIdToken({ iss: 'e', aud: ['outro', 'app'], exp: 20, nonce: 'n' }, ctx)).toBe(null);
+        expect(conferirIdToken({ iss: 'e', aud: ['outro'], exp: 20, nonce: 'n' }, ctx)).toBe('audiencia');
+    - name: expira no segundo exato
+      hidden: true
+      code: |
+        const ctx = { emissor: 'e', clienteId: 'app', nonce: 'n', agora: 10 };
+        expect(conferirIdToken({ iss: 'e', aud: 'app', exp: 10, nonce: 'n' }, ctx)).toBe('expirado');
+        expect(conferirIdToken({ iss: 'e', aud: 'app', nonce: 'n' }, ctx)).toBe('expirado');
+    - name: nonce de outro login
+      hidden: true
+      code: |
+        const ctx = { emissor: 'e', clienteId: 'app', nonce: 'n', agora: 10 };
+        expect(conferirIdToken({ iss: 'e', aud: 'app', exp: 20, nonce: 'velho' }, ctx)).toBe('nonce');
+  hints:
+    - Transforme `aud` num array sempre, e use `includes`.
+  explanation: |
+    OpenID Connect acrescenta identidade ao OAuth 2.0: o ID Token diz quem fez login, para qual aplicativo e até quando. Conferir emissor e audiência impede aceitar um token emitido para outro app. O `nonce` liga o token ao pedido de login que o próprio app iniciou e impede reaproveitar um token antigo.
+  traps:
+    - reason: aud só como texto
+      code: |
+        function conferirIdToken(c, { emissor, clienteId, nonce, agora }) {
+          if (c.iss !== emissor) return 'emissor';
+          if (c.aud !== clienteId) return 'audiencia';
+          if (!(c.exp > agora)) return 'expirado';
+          if (c.nonce !== nonce) return 'nonce';
+          return null;
+        }
+    - reason: Aceita o segundo exato da expiração
+      code: |
+        function conferirIdToken(c, { emissor, clienteId, nonce, agora }) {
+          if (c.iss !== emissor) return 'emissor';
+          if (![].concat(c.aud).includes(clienteId)) return 'audiencia';
+          if (c.exp < agora) return 'expirado';
+          if (c.nonce !== nonce) return 'nonce';
+          return null;
+        }
+
+- slug: id-token-ou-access-token
+  title: Dois tokens no mesmo login
+  difficulty: medio
+  kind: quiz
+  in: [apis/OpenID, apis/OAuth, apis/JWT]
+  study:
+    - { label: "Como o OpenID Connect funciona (em inglês)", url: "https://openid.net/developers/how-connect-works/" }
+  statement: |
+    Depois do login com OpenID Connect, o app recebeu um `id_token` e um `access_token`. Um dev começou a mandar o `id_token` para a API de pedidos, no cabeçalho `Authorization`.
+
+    O que está errado?
+  options:
+    - text: O ID Token diz ao app quem fez login. Para chamar APIs, o certo é o access token, emitido para aquela API, com os escopos permitidos
+      why: Certo. A audiência do ID Token é o próprio app, não a API.
+    - text: Nada, os dois tokens são iguais
+      why: Eles têm propósitos e audiências diferentes.
+    - text: O certo é mandar a senha da pessoa para a API
+      why: O objetivo do OAuth é justamente nunca repassar a senha.
+    - text: O access token serve para mostrar o nome da pessoa na tela
+      why: Quem traz os dados de identidade para o app é o ID Token, ou o endpoint userinfo.
+  answer: 0
+  explanation: |
+    OAuth 2.0 trata de autorização: um access token permite chamar uma API em nome de alguém. OpenID Connect acrescenta autenticação, com o ID Token, um JWT sobre a pessoa que fez login. Misturar os dois faz a API aceitar tokens que não foram emitidos para ela.
+
+- slug: login-corporativo-saml
+  title: O login dos funcionários do patrocinador
+  difficulty: medio
+  kind: quiz
+  in: [apis/SAML, apis/Authentication]
+  study:
+    - { label: "SAML (Wikipédia, em inglês)", url: "https://en.wikipedia.org/wiki/Security_Assertion_Markup_Language" }
+  statement: |
+    Um patrocinador quer que os funcionários entrem no portal de credenciamento com a conta da empresa. O time de TI deles mandou um arquivo de metadados SAML e falou em IdP e SP.
+
+    Como esse login funciona?
+  options:
+    - text: O portal é o SP, o provedor de serviço. Ele redireciona a pessoa ao IdP da empresa, que autentica e devolve uma asserção XML assinada dizendo quem ela é
+      why: Certo. O portal confia no IdP por meio do certificado trocado nos metadados.
+    - text: O portal recebe a senha da conta da empresa e confere no próprio banco
+      why: No SAML, a senha só é digitada no IdP. O portal nunca a vê.
+    - text: SAML é um formato de log de acesso
+      why: SAML é um padrão de autenticação e troca de identidade entre organizações.
+    - text: O IdP é o portal, e o SP é a empresa
+      why: É o contrário. Quem fornece a identidade é a empresa, e quem fornece o serviço é o portal.
+  answer: 0
+  explanation: |
+    SAML 2.0 é o padrão de login único mais comum em empresas. A troca acontece pelo navegador, com redirecionamentos e formulários, e a confiança vem das assinaturas XML. Em sistemas novos, OpenID Connect faz o mesmo papel com JSON.
+
+- slug: aceitar-assercao-saml
+  title: A asserção que chegou duas vezes
+  difficulty: dificil
+  kind: quiz
+  in: [apis/SAML, web-security/OWASP Risks]
+  study:
+    - { label: "SAML Security Cheat Sheet (OWASP, em inglês)", url: "https://cheatsheetseries.owasp.org/cheatsheets/SAML_Security_Cheat_Sheet.html" }
+  statement: |
+    O portal recebe uma asserção SAML com a assinatura válida do IdP. Antes de criar a sessão, o que mais ele precisa conferir?
+  options:
+    - text: Que a audiência é o próprio portal, que a validade NotOnOrAfter não passou, e que o ID da asserção ainda não foi usado, para impedir reenvio
+      why: Certo. Uma assinatura válida só prova a origem. O resto prova que ela é para este portal, agora, e uma vez só.
+    - text: Nada, a assinatura válida basta
+      why: Uma asserção legítima de outro serviço, ou capturada e reenviada, também tem assinatura válida.
+    - text: Que o XML está bem indentado
+      why: Formatação não tem efeito na segurança.
+    - text: Que a pessoa já tem conta no portal com a mesma senha
+      why: No SAML, o portal nunca recebe a senha.
+  answer: 0
+  explanation: |
+    Bibliotecas SAML conferem assinatura, audiência, validade e destino. Falhas clássicas incluem aceitar asserções sem assinatura, assinar só parte do XML e não guardar os IDs já usados. Use uma biblioteca mantida, nunca um parser XML caseiro.
+
+- slug: htaccess-do-apache
+  title: O arquivo em cada pasta
+  difficulty: facil
+  kind: quiz
+  in: [web-servers/Apache]
+  study:
+    - { label: "Tutorial de .htaccess (Apache, em inglês)", url: "https://httpd.apache.org/docs/current/howto/htaccess.html" }
+  statement: |
+    O site antigo do festival roda num Apache de hospedagem compartilhada. Para redirecionar uma página, a hospedagem orienta criar um arquivo `.htaccess` na pasta.
+
+    O que é esse arquivo, e qual o custo dele?
+  options:
+    - text: Uma configuração do Apache por pasta, lida a cada pedido. É útil quando não há acesso à configuração principal, mas é mais lenta que pôr as regras lá
+      why: Certo. A documentação do Apache recomenda a configuração principal sempre que houver acesso a ela.
+    - text: Um arquivo de senha do banco de dados
+      why: Ele guarda diretivas do Apache, como redirecionamentos e regras de acesso.
+    - text: Um arquivo que o Nginx também lê
+      why: O Nginx não tem configuração por pasta e ignora o .htaccess.
+    - text: Um arquivo lido uma vez, ao iniciar o servidor
+      why: Ele é procurado e lido a cada pedido, o que custa desempenho.
+  answer: 0
+  explanation: |
+    O Apache é modular e permite configuração distribuída por pasta, o que o tornou o padrão das hospedagens compartilhadas. O Nginx usa um modelo orientado a eventos e configuração central, e por isso costuma lidar melhor com muitas conexões simultâneas.
+
+- slug: https-automatico-no-caddy
+  title: O certificado que se renova sozinho
+  difficulty: facil
+  kind: quiz
+  in: [web-servers/Caddy, web-security/SSL/TLS]
+  study:
+    - { label: "HTTPS automático (Caddy, em inglês)", url: "https://caddyserver.com/docs/automatic-https" }
+  statement: |
+    O site da pré-venda vai rodar num servidor novo. Um colega sugere o Caddy e diz que o arquivo de configuração tem duas linhas: o domínio e o endereço da API.
+
+    O que o Caddy faz de diferente?
+  options:
+    - text: Ele obtém e renova sozinho certificados TLS, por exemplo da Let's Encrypt, e redireciona HTTP para HTTPS por padrão
+      why: Certo. HTTPS automático é a marca do Caddy.
+    - text: Ele desliga o HTTPS para ficar mais rápido
+      why: 'O padrão do Caddy é o oposto: HTTPS sempre.'
+    - text: Ele só serve arquivos PHP
+      why: Ele serve arquivos estáticos e funciona como proxy reverso para qualquer aplicação.
+    - text: Ele dispensa domínio
+      why: Para obter certificados públicos, o domínio precisa apontar para o servidor.
+  answer: 0
+  explanation: |
+    Caddy é um servidor web escrito em Go, com configuração simples e HTTPS automático via protocolo ACME. Nginx e Apache fazem o mesmo com ferramentas externas, como o certbot.
+
+- slug: iis-no-windows
+  title: A API de credenciamento em .NET
+  difficulty: facil
+  kind: quiz
+  in: [web-servers/MS IIS, backend-language/C#]
+  study:
+    - { label: "Introdução à arquitetura do IIS (Microsoft)", url: "https://learn.microsoft.com/pt-br/iis/get-started/introduction-to-iis/introduction-to-iis-architecture" }
+  statement: |
+    A empresa de credenciamento roda a API em ASP.NET num Windows Server, atrás do IIS, e a configuração fica num `web.config`.
+
+    O que é o IIS?
+  options:
+    - text: O servidor web da Microsoft para Windows, que hospeda sites e aplicações .NET, com configuração em XML no web.config
+      why: Certo. Ele cumpre no Windows o papel que Nginx e Apache costumam cumprir no Linux.
+    - text: Um banco de dados da Microsoft
+      why: O banco da Microsoft é o SQL Server.
+    - text: Um servidor que só roda em Linux
+      why: O IIS faz parte do Windows.
+    - text: Uma linguagem de programação
+      why: É um servidor web. A linguagem, nesse caso, é C#.
+  answer: 0
+  explanation: |
+    IIS, Internet Information Services, integra-se ao Windows e ao ASP.NET. Aplicações ASP.NET Core também rodam no servidor Kestrel, em Linux ou atrás de Nginx, o que tornou o IIS uma escolha, não uma obrigação.
+
+- slug: rota-mais-especifica
+  title: Para qual serviço vai o pedido
+  difficulty: medio
+  kind: js
+  visual: requisicao
+  in: [web-servers/Nginx, web-servers/Caddy]
+  study:
+    - { label: "Diretiva location (Nginx, em inglês)", url: "https://nginx.org/en/docs/http/ngx_http_core_module.html#location" }
+  statement: |
+    O proxy reverso manda cada pedido para um serviço, conforme o prefixo do caminho. Escreva `escolherRota(rotas, caminho)`, que devolve a rota de prefixo mais longo que combina, ou `null`:
+
+    - `/api` combina com `/api` e com `/api/shows`, mas não com `/apix`. O prefixo termina numa barra ou no fim do caminho
+    - `/` combina com qualquer caminho
+    - a ordem da lista não importa
+  solution: |
+    function escolherRota(rotas, caminho) {
+      let melhor = null;
+      for (const rota of rotas) {
+        const base = rota.endsWith('/') ? rota : rota + '/';
+        const combina = caminho === rota || caminho.startsWith(base);
+        if (combina && (melhor === null || rota.length > melhor.length)) melhor = rota;
+      }
+      return melhor;
+    }
+  tests:
+    - name: o mais longo vence
+      code: |
+        const rotas = ['/', '/api', '/api/admin'];
+        expect(escolherRota(rotas, '/api/admin/usuarios')).toBe('/api/admin');
+        expect(escolherRota(rotas, '/api/shows')).toBe('/api');
+        expect(escolherRota(rotas, '/sobre')).toBe('/');
+    - name: o caminho exato
+      code: |
+        expect(escolherRota(['/', '/api'], '/api')).toBe('/api');
+    - name: prefixo no meio da palavra
+      hidden: true
+      code: |
+        expect(escolherRota(['/', '/api'], '/apix')).toBe('/');
+    - name: nada combina
+      hidden: true
+      code: |
+        expect(escolherRota(['/api'], '/loja')).toBe(null);
+    - name: a ordem não importa
+      hidden: true
+      code: |
+        expect(escolherRota(['/api/admin', '/', '/api'], '/api/admin')).toBe('/api/admin');
+  hints:
+    - Compare com `rota + '/'` para exigir o fim de um segmento.
+  explanation: |
+    Proxies como Nginx e Caddy escolhem o bloco mais específico, não o primeiro que aparece. A confusão entre prefixo de texto e prefixo de caminho é uma fonte clássica de bugs de roteamento e até de falhas de segurança, como expor `/admin-backup` por uma regra de `/admin`.
+  traps:
+    - reason: Prefixo de texto, não de caminho
+      code: |
+        function escolherRota(rotas, caminho) {
+          let m = null;
+          for (const r of rotas) if (caminho.startsWith(r) && (m === null || r.length > m.length)) m = r;
+          return m;
+        }
+    - reason: Fica com a primeira que combina
+      code: |
+        function escolherRota(rotas, caminho) {
+          return rotas.find((r) => caminho === r || caminho.startsWith(r.endsWith('/') ? r : r + '/')) ?? null;
+        }
+
+- slug: md5-nao-serve
+  title: O MD5 do sistema antigo
+  difficulty: facil
+  kind: quiz
+  in: [web-security/MD5]
+  study:
+    - { label: "MD5 (Wikipédia)", url: "https://pt.wikipedia.org/wiki/MD5" }
+    - { label: "RFC 6151: segurança do MD5 (em inglês)", url: "https://www.rfc-editor.org/rfc/rfc6151" }
+  statement: |
+    O sistema antigo de credenciamento guarda as senhas como `MD5(senha)` e confere arquivos enviados com MD5.
+
+    Qual afirmação está correta?
+  options:
+    - text: MD5 tem colisões práticas e é rápido demais. Não serve para senhas nem para provar que um arquivo não foi adulterado. Ainda serve para detectar corrupção acidental
+      why: Certo. Contra um atacante, use SHA-256 para integridade e bcrypt, scrypt ou Argon2 para senhas.
+    - text: MD5 é seguro porque gera 128 bits
+      why: Gerar colisões de MD5 leva segundos num computador comum.
+    - text: Basta aplicar MD5 duas vezes
+      why: Repetir um hash rápido continua rápido para quem testa bilhões de senhas.
+    - text: MD5 é criptografia e pode ser revertido com a chave
+      why: MD5 é um hash, sem chave. A fraqueza está nas colisões e na velocidade.
+  answer: 0
+  explanation: |
+    Uma função de hash criptográfica deve tornar impraticável achar duas entradas com o mesmo resultado. O MD5 perdeu essa propriedade em 2004. Para senhas, o problema é outro: qualquer hash rápido, até o SHA-256, permite testar bilhões de tentativas por segundo.
+
+- slug: etag-com-sha256
+  title: A ETag do catálogo
+  difficulty: medio
+  kind: js
+  in: [web-security/SHA, caching/HTTP Caching]
+  study:
+    - { label: "SubtleCrypto.digest (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest" }
+    - { label: "ETag (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag" }
+  statement: |
+    A API do catálogo de merch responde com uma `ETag` calculada do corpo, para os clientes revalidarem o cache.
+
+    Escreva `async function etag(corpo)`, que devolve os 16 primeiros caracteres hexadecimais do SHA-256 do texto em UTF-8, entre aspas duplas. Por exemplo, `etag('abc')` dá `"ba7816bf8f01cfea"`. Use `crypto.subtle.digest`.
+  solution: |
+    async function etag(corpo) {
+      const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(corpo)));
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      return `"${hex.slice(0, 16)}"`;
+    }
+  tests:
+    - name: '"abc"'
+      code: |
+        expect(await etag('abc')).toBe('"ba7816bf8f01cfea"');
+    - name: texto vazio
+      code: |
+        expect(await etag('')).toBe('"e3b0c44298fc1c14"');
+    - name: acentos em UTF-8
+      hidden: true
+      code: |
+        const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('Camiseta ação')));
+        const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+        expect(await etag('Camiseta ação')).toBe(`"${hex.slice(0, 16)}"`);
+    - name: corpos diferentes, ETags diferentes
+      hidden: true
+      code: |
+        expect(await etag('{"estoque":1}')).not.toBe(await etag('{"estoque":2}'));
+  hints:
+    - "`crypto.subtle.digest('SHA-256', bytes)` devolve um `ArrayBuffer`."
+    - Bytes menores que 16 viram um dígito só em hexadecimal. `padStart(2, '0')` completa.
+  explanation: |
+    SHA-256 é um hash criptográfico sem colisões conhecidas, e serve para identificar conteúdo: ETags, nomes de arquivo com hash, verificação de downloads. Truncar para 16 caracteres basta para uma ETag, mas não para provar integridade contra um atacante.
+  traps:
+    - reason: Esquece o zero à esquerda
+      code: |
+        async function etag(corpo) {
+          const b = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(corpo)));
+          return `"${Array.from(b, (x) => x.toString(16)).join('').slice(0, 16)}"`;
+        }
+    - reason: Usa SHA-1
+      code: |
+        async function etag(corpo) {
+          const b = new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(corpo)));
+          return `"${Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('').slice(0, 16)}"`;
+        }
+
+- slug: assinatura-do-webhook
+  title: O webhook do gateway de pagamento
+  difficulty: dificil
+  kind: js
+  in: [web-security/SHA, apis/Token Authentication]
+  study:
+    - { label: "Validando entregas de webhooks (GitHub)", url: "https://docs.github.com/pt/webhooks/using-webhooks/validating-webhook-deliveries" }
+    - { label: "SubtleCrypto.sign (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign" }
+  statement: |
+    O gateway avisa a API quando um pagamento é aprovado, num `POST` com o cabeçalho `x-assinatura: sha256=<hex>`. O hex é o HMAC-SHA256 do corpo, com um segredo que só a API e o gateway conhecem.
+
+    Escreva `async function assinaturaValida(segredo, corpo, assinatura)`, que devolve `true` só quando a assinatura confere:
+
+    - o prefixo precisa ser `sha256=`
+    - o hex recebido pode vir em maiúsculas
+    - compare sem parar no primeiro caractere diferente, para não vazar informação pelo tempo de resposta
+  solution: |
+    async function assinaturaValida(segredo, corpo, assinatura) {
+      if (typeof assinatura !== 'string' || !assinatura.startsWith('sha256=')) return false;
+      const texto = new TextEncoder();
+      const chave = await crypto.subtle.importKey('raw', texto.encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', chave, texto.encode(corpo)));
+      const esperado = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      const recebido = assinatura.slice('sha256='.length).toLowerCase();
+      if (recebido.length !== esperado.length) return false;
+      let diferenca = 0;
+      for (let i = 0; i < esperado.length; i++) diferenca |= esperado.charCodeAt(i) ^ recebido.charCodeAt(i);
+      return diferenca === 0;
+    }
+  tests:
+    - name: vetor conhecido
+      code: |
+        const s = 'sha256=f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8';
+        expect(await assinaturaValida('key', 'The quick brown fox jumps over the lazy dog', s)).toBe(true);
+    - name: corpo adulterado
+      code: |
+        const s = 'sha256=f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8';
+        expect(await assinaturaValida('key', 'The quick brown fox jumps over the lazy cat', s)).toBe(false);
+    - name: hex em maiúsculas
+      hidden: true
+      code: |
+        const s = 'sha256=F7BC83F430538424B13298E6AA6FB143EF4D59A14946175997479DBC2D1A3CD8';
+        expect(await assinaturaValida('key', 'The quick brown fox jumps over the lazy dog', s)).toBe(true);
+    - name: prefixo e formato
+      hidden: true
+      code: |
+        const hex = 'f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8';
+        const corpo = 'The quick brown fox jumps over the lazy dog';
+        expect(await assinaturaValida('key', corpo, 'sha1=' + hex)).toBe(false);
+        expect(await assinaturaValida('key', corpo, 'sha256=' + hex.slice(0, 10))).toBe(false);
+        expect(await assinaturaValida('key', corpo, undefined)).toBe(false);
+    - name: segredo errado
+      hidden: true
+      code: |
+        const s = 'sha256=f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8';
+        expect(await assinaturaValida('outra', 'The quick brown fox jumps over the lazy dog', s)).toBe(false);
+  hints:
+    - "`crypto.subtle.importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])` cria a chave."
+    - Para comparar em tempo constante, junte as diferenças de todos os caracteres com `|=` e só confira no fim.
+  explanation: |
+    HMAC prova que a mensagem veio de quem tem o segredo e que não foi alterada. Um hash simples de segredo mais corpo é vulnerável a ataques de extensão de tamanho. A comparação em tempo constante impede que um atacante descubra a assinatura certa medindo quanto cada tentativa demora.
+  traps:
+    - reason: Hash do segredo com o corpo, sem HMAC
+      code: |
+        async function assinaturaValida(segredo, corpo, assinatura) {
+          const b = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(segredo + corpo)));
+          return assinatura === 'sha256=' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+        }
+    - reason: Não aceita maiúsculas
+      code: |
+        async function assinaturaValida(segredo, corpo, assinatura) {
+          const t = new TextEncoder();
+          const k = await crypto.subtle.importKey('raw', t.encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+          const b = new Uint8Array(await crypto.subtle.sign('HMAC', k, t.encode(corpo)));
+          return assinatura === 'sha256=' + Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+        }
+
+- slug: ler-hash-bcrypt
+  title: O que há dentro de um hash bcrypt
+  difficulty: medio
+  kind: js
+  in: [web-security/bcrypt]
+  study:
+    - { label: "bcrypt (Wikipédia, em inglês)", url: "https://en.wikipedia.org/wiki/Bcrypt" }
+    - { label: "Armazenamento de senhas (OWASP, em inglês)", url: "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html" }
+  statement: |
+    Um hash bcrypt guarda tudo que é preciso para conferir a senha depois: `$2b$12$` seguido de 22 caracteres de sal e 31 de hash, num alfabeto de `.`, `/`, letras e dígitos.
+
+    O sistema vai subir o custo mínimo, e as senhas antigas precisam ser refeitas no próximo login. Escreva `lerBcrypt(hash)`, que devolve `{ versao, custo, sal, hash }` ou `null` se o formato for inválido. `custo` é um número. As versões válidas são `2a`, `2b`, `2x` e `2y`.
+  solution: |
+    function lerBcrypt(hash) {
+      const partes = /^\$(2[abxy])\$(\d{2})\$([./A-Za-z0-9]{22})([./A-Za-z0-9]{31})$/.exec(String(hash));
+      if (!partes) return null;
+      return { versao: partes[1], custo: Number(partes[2]), sal: partes[3], hash: partes[4] };
+    }
+  tests:
+    - name: lê as partes
+      code: |
+        expect(lerBcrypt('$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy')).toEqual({
+          versao: '2a', custo: 10, sal: 'N9qo8uLOickgx2ZMRZoMye', hash: 'IjZAgcfl7p92ldGxad68LJZdL17lhWy',
+        });
+    - name: formato errado
+      code: |
+        expect(lerBcrypt('5f4dcc3b5aa765d61d8327deb882cf99')).toBe(null);
+    - name: custo com zero à esquerda
+      hidden: true
+      code: |
+        expect(lerBcrypt('$2b$04$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy').custo).toBe(4);
+    - name: tamanho errado
+      hidden: true
+      code: |
+        expect(lerBcrypt('$2b$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhW')).toBe(null);
+        expect(lerBcrypt('$2b$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWyy')).toBe(null);
+    - name: outra família de hash
+      hidden: true
+      code: |
+        expect(lerBcrypt('$1$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy')).toBe(null);
+  hints:
+    - Uma expressão regular com grupos para versão, custo, sal e hash resolve tudo de uma vez.
+    - "`Number('04')` dá 4."
+  explanation: |
+    O custo do bcrypt é um expoente: cada ponto a mais dobra o tempo de cálculo. Como o custo e o sal ficam dentro do próprio hash, dá para conferir senhas antigas e, no login, refazer o hash com o custo novo quando ele estiver abaixo do mínimo.
+  traps:
+    - reason: Custo como texto
+      code: |
+        function lerBcrypt(h) {
+          const m = /^\$(2[abxy])\$(\d{2})\$([./A-Za-z0-9]{22})([./A-Za-z0-9]{31})$/.exec(String(h));
+          return m ? { versao: m[1], custo: m[2], sal: m[3], hash: m[4] } : null;
+        }
+    - reason: Não confere o tamanho
+      code: |
+        function lerBcrypt(h) {
+          const [, versao, custo, resto] = String(h).split('$');
+          if (!resto || !/^2[abxy]$/.test(versao)) return null;
+          return { versao, custo: Number(custo), sal: resto.slice(0, 22), hash: resto.slice(22) };
+        }
+
+- slug: hash-lento-de-proposito
+  title: Por que o hash de senha é lento
+  difficulty: medio
+  kind: quiz
+  in: [web-security/bcrypt, web-security/scrypt]
+  study:
+    - { label: "Armazenamento de senhas (OWASP, em inglês)", url: "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html" }
+  statement: |
+    Um dev propõe trocar o bcrypt por SHA-256 com sal, porque o login ficaria 200 ms mais rápido.
+
+    Por que não fazer isso?
+  options:
+    - text: Se o banco vazar, o atacante testa senhas offline. Com SHA-256, uma placa de vídeo testa bilhões por segundo. Com bcrypt ou scrypt, cada tentativa custa caro de propósito
+      why: Certo. A lentidão é a defesa. O custo de 200 ms por login é pequeno para a API e enorme para quem testa bilhões de senhas.
+    - text: SHA-256 não aceita sal
+      why: Aceita, mas o sal sozinho não impede testar senhas rapidamente.
+    - text: bcrypt pode ser revertido em caso de emergência
+      why: Nenhum hash de senha pode ser revertido, e isso é o que se quer.
+    - text: Não há diferença, os dois são hashes
+      why: Hashes rápidos servem para integridade. Hashes de senha são feitos para ser caros.
+  answer: 0
+  explanation: |
+    Funções de hash de senha, como bcrypt, scrypt e Argon2, têm um custo ajustável e um sal por senha. O sal impede tabelas pré-calculadas, e o custo limita quantas tentativas por segundo um atacante consegue. A OWASP recomenda Argon2id, com scrypt e bcrypt como alternativas.
+
+- slug: scrypt-e-memoria
+  title: O hash que pede memória
+  difficulty: dificil
+  kind: quiz
+  in: [web-security/scrypt]
+  study:
+    - { label: "RFC 7914: scrypt (em inglês)", url: "https://www.rfc-editor.org/rfc/rfc7914" }
+  statement: |
+    O scrypt tem, além do custo de tempo, um parâmetro que define quanta memória cada cálculo usa.
+
+    Que vantagem isso traz contra atacantes?
+  options:
+    - text: Placas de vídeo e chips dedicados rodam milhares de cálculos em paralelo, mas com pouca memória para cada um. Exigir memória limita esse paralelismo
+      why: Certo. Funções que usam muita memória, como scrypt e Argon2, encarecem o hardware de ataque.
+    - text: A memória guarda a senha original para recuperação
+      why: A memória é usada durante o cálculo e descartada. Nada é recuperável.
+    - text: Funções com memória são mais rápidas para o servidor
+      why: O objetivo é ser caro para todo mundo, inclusive o servidor, dentro de um limite aceitável.
+    - text: Elas dispensam o sal
+      why: O sal continua necessário, para cada senha ter um hash diferente.
+  answer: 0
+  explanation: |
+    O bcrypt é limitado em tempo, mas usa pouca memória. O scrypt e o Argon2 são memory-hard: o custo de memória torna caro fabricar hardware dedicado. Escolha os parâmetros para o login levar algumas centenas de milissegundos no servidor.
+
+- slug: certificado-coringa
+  title: O certificado vale para este domínio?
+  difficulty: medio
+  kind: js
+  in: [web-security/SSL/TLS]
+  study:
+    - { label: "RFC 6125: nomes com coringa (em inglês)", url: "https://www.rfc-editor.org/rfc/rfc6125#section-6.4.3" }
+    - { label: "TLS (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/Security/Transport_Layer_Security" }
+  statement: |
+    O festival tem um certificado para `*.festival.com`. Escreva `nomeConfere(padrao, host)`, que diz se o nome do certificado vale para o host, como os navegadores fazem:
+
+    - a comparação não diferencia maiúsculas
+    - `*` só vale como o primeiro rótulo inteiro, e cobre exatamente um rótulo: `*.festival.com` vale para `loja.festival.com`, mas não para `festival.com` nem para `a.loja.festival.com`
+    - sem `*`, o nome precisa ser igual
+  solution: |
+    function nomeConfere(padrao, host) {
+      const p = padrao.toLowerCase().split('.');
+      const h = host.toLowerCase().split('.');
+      if (p.length !== h.length) return false;
+      return p.every((parte, i) => (i === 0 && parte === '*' ? h[0].length > 0 : parte === h[i]));
+    }
+  tests:
+    - name: coringa
+      code: |
+        expect(nomeConfere('*.festival.com', 'loja.festival.com')).toBe(true);
+        expect(nomeConfere('*.festival.com', 'festival.com')).toBe(false);
+    - name: nome exato
+      code: |
+        expect(nomeConfere('festival.com', 'FESTIVAL.com')).toBe(true);
+        expect(nomeConfere('festival.com', 'loja.festival.com')).toBe(false);
+    - name: coringa cobre um rótulo só
+      hidden: true
+      code: |
+        expect(nomeConfere('*.festival.com', 'a.loja.festival.com')).toBe(false);
+    - name: sufixo parecido
+      hidden: true
+      code: |
+        expect(nomeConfere('*.festival.com', 'lojafestival.com')).toBe(false);
+        expect(nomeConfere('*.festival.com', 'loja.festival.com.br')).toBe(false);
+    - name: coringa fora do começo
+      hidden: true
+      code: |
+        expect(nomeConfere('loja.*.com', 'loja.festival.com')).toBe(false);
+  hints:
+    - Separe os dois nomes por `.` e compare rótulo por rótulo.
+  explanation: |
+    Na conexão TLS, o cliente confere se o certificado foi emitido para o nome que ele pediu. Coringas cobrem um nível só, por isso `*.festival.com` não protege `api.loja.festival.com`. Regras frouxas, como transformar `*` em `.*` numa regex, já causaram falhas de segurança reais.
+  traps:
+    - reason: Coringa vira .* e atravessa pontos
+      code: |
+        function nomeConfere(p, h) {
+          const re = new RegExp('^' + p.toLowerCase().replace(/\./g, '\\.').replace('*', '.*') + '$');
+          return re.test(h.toLowerCase());
+        }
+    - reason: Só confere o final
+      code: |
+        function nomeConfere(p, h) {
+          p = p.toLowerCase(); h = h.toLowerCase();
+          return p.startsWith('*.') ? h.endsWith(p.slice(1)) : p === h;
+        }
+
+- slug: cadeia-incompleta
+  title: Funciona no navegador, falha na API
+  difficulty: dificil
+  kind: quiz
+  in: [web-security/SSL/TLS, web-servers/Nginx]
+  study:
+    - { label: "Cadeia de certificados (Let's Encrypt)", url: "https://letsencrypt.org/pt-br/certificates/" }
+  statement: |
+    Depois de instalar um certificado novo, o site abre normalmente no Chrome, mas o parceiro que chama a API com um cliente HTTP em Python recebe `certificate verify failed: unable to get local issuer certificate`.
+
+    Qual a causa mais provável?
+  options:
+    - text: O servidor manda só o certificado do domínio, sem o intermediário. Navegadores às vezes completam a cadeia sozinhos, clientes de linha de comando não. Configure o arquivo com a cadeia completa
+      why: Certo. No Nginx, ssl_certificate deve apontar para o fullchain.
+    - text: O Python não suporta HTTPS
+      why: Suporta. O erro diz que ele não conseguiu montar a cadeia até uma autoridade confiável.
+    - text: O certificado expirou
+      why: Um certificado expirado falharia também no navegador, com outra mensagem.
+    - text: O parceiro precisa desligar a verificação de certificado
+      why: Isso aceita qualquer certificado, inclusive de um atacante no meio do caminho.
+  answer: 0
+  explanation: |
+    Um certificado é confiável quando forma uma cadeia até uma autoridade raiz que o cliente conhece. O servidor precisa enviar os intermediários. Ferramentas como `openssl s_client -showcerts` mostram o que o servidor realmente manda.
+
+- slug: conserte-404-com-200
+  title: O show que não existe responde 200
+  difficulty: facil
+  kind: js
+  visual: requisicao
+  in: [conserte/APIs, apis/REST]
+  study:
+    - { label: "Códigos de status HTTP (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Status" }
+  starter: |
+    async function buscarShow(req, db) {
+      const id = Number(req.params.id);
+      const show = await db.buscarShow(id);
+      if (!show) return { status: 200, headers: {}, body: { erro: 'show não encontrado' } };
+      return { status: 200, headers: {}, body: show };
+    }
+  statement: |
+    A rota `GET /shows/:id` responde `200` até quando o show não existe, e o app mostra uma tela vazia em vez da mensagem de erro. Além disso, `/shows/abc` chega ao banco.
+
+    Conserte `buscarShow(req, db)`:
+
+    - `id` que não seja um inteiro positivo, só com dígitos, responde `400` sem consultar o banco
+    - show inexistente responde `404`
+    - show encontrado responde `200` com o show no `body`
+  solution: |
+    async function buscarShow(req, db) {
+      const texto = String(req.params.id);
+      if (!/^\d+$/.test(texto) || Number(texto) === 0) {
+        return { status: 400, headers: {}, body: { erro: 'id inválido' } };
+      }
+      const show = await db.buscarShow(Number(texto));
+      if (!show) return { status: 404, headers: {}, body: { erro: 'show não encontrado' } };
+      return { status: 200, headers: {}, body: show };
+    }
+  tests:
+    - name: encontrado
+      code: |
+        const db = { buscarShow: async (id) => (id === 3 ? { id: 3, banda: 'Ferro Velho' } : null) };
+        const r = await buscarShow({ params: { id: '3' } }, db);
+        expect(r.status).toBe(200);
+        expect(r.body).toEqual({ id: 3, banda: 'Ferro Velho' });
+    - name: inexistente
+      code: |
+        const db = { buscarShow: async () => null };
+        expect((await buscarShow({ params: { id: '99' } }, db)).status).toBe(404);
+    - name: id inválido não chega ao banco
+      hidden: true
+      code: |
+        const db = { buscarShow: fn(async () => null) };
+        for (const id of ['abc', '1.5', '-3', '0', '', '2e3']) {
+          expect((await buscarShow({ params: { id } }, db)).status).toBe(400);
+        }
+        expect(db.buscarShow).toHaveBeenCalledTimes(0);
+  hints:
+    - "`Number('')` dá 0 e `Number('2e3')` dá 2000. Confira o texto com uma regex antes de converter."
+  explanation: |
+    O status é a primeira coisa que clientes, caches e monitores leem. Um erro com `200` passa por sucesso em todos eles. Validar o formato antes de consultar o banco poupa trabalho e evita mensagens de erro do banco vazando para a resposta.
+  traps:
+    - reason: Number aceita frações e notação científica
+      code: |
+        async function buscarShow(req, db) {
+          const id = Number(req.params.id);
+          if (Number.isNaN(id) || id <= 0) return { status: 400, headers: {}, body: {} };
+          const show = await db.buscarShow(id);
+          return show ? { status: 200, headers: {}, body: show } : { status: 404, headers: {}, body: {} };
+        }
+
+- slug: conserte-criacao-201
+  title: O show criado sem endereço
+  difficulty: medio
+  kind: js
+  visual: requisicao
+  in: [conserte/APIs, apis/REST, apis/JSON APIs]
+  study:
+    - { label: "201 Created (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/201" }
+    - { label: "422 Unprocessable Content (MDN, em inglês)", url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422" }
+  starter: |
+    async function criarShow(req, db) {
+      const show = await db.inserirShow(req.body);
+      return { status: 200, headers: {}, body: show };
+    }
+  statement: |
+    `POST /shows` grava qualquer coisa que chega e responde `200`. Conserte `criarShow(req, db)`:
+
+    - `band_id` precisa ser inteiro positivo e `show_date` precisa estar no formato `AAAA-MM-DD`. Se algum falhar, responda `422` com `body: { campos: [...] }`, listando os campos inválidos nessa ordem, sem gravar nada
+    - quando grava, responda `201`, com o show criado no `body` e o cabeçalho `location` apontando para `/shows/<id>`
+  solution: |
+    async function criarShow(req, db) {
+      const corpo = req.body ?? {};
+      const campos = [];
+      if (!Number.isInteger(corpo.band_id) || corpo.band_id <= 0) campos.push('band_id');
+      if (typeof corpo.show_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(corpo.show_date)) campos.push('show_date');
+      if (campos.length) return { status: 422, headers: {}, body: { campos } };
+      const show = await db.inserirShow({ band_id: corpo.band_id, show_date: corpo.show_date });
+      return { status: 201, headers: { location: `/shows/${show.id}` }, body: show };
+    }
+  tests:
+    - name: cria com 201 e location
+      code: |
+        const db = { inserirShow: async (s) => ({ id: 41, ...s }) };
+        const r = await criarShow({ body: { band_id: 2, show_date: '2026-09-12' } }, db);
+        expect(r.status).toBe(201);
+        expect(r.headers.location).toBe('/shows/41');
+        expect(r.body.id).toBe(41);
+    - name: campos inválidos
+      code: |
+        const db = { inserirShow: fn(async (s) => ({ id: 1, ...s })) };
+        const r = await criarShow({ body: { band_id: 'dois', show_date: '12/09/2026' } }, db);
+        expect(r.status).toBe(422);
+        expect(r.body.campos).toEqual(['band_id', 'show_date']);
+        expect(db.inserirShow).toHaveBeenCalledTimes(0);
+    - name: um campo só
+      hidden: true
+      code: |
+        const db = { inserirShow: fn(async (s) => ({ id: 1, ...s })) };
+        expect((await criarShow({ body: { band_id: 0, show_date: '2026-09-12' } }, db)).body.campos).toEqual(['band_id']);
+        expect((await criarShow({ body: { band_id: 3 } }, db)).body.campos).toEqual(['show_date']);
+        expect((await criarShow({}, db)).body.campos).toEqual(['band_id', 'show_date']);
+        expect(db.inserirShow).toHaveBeenCalledTimes(0);
+  hints:
+    - Junte todos os campos inválidos antes de responder, para o app mostrar todos os erros de uma vez.
+  explanation: |
+    `201 Created` com `Location` diz ao cliente que algo novo existe e onde encontrá-lo. `422` indica que o JSON veio bem formado, mas os dados não passam nas regras. Listar todos os campos inválidos poupa idas e voltas ao formulário.
+  traps:
+    - reason: Sem o cabeçalho location
+      code: |
+        async function criarShow(req, db) {
+          const c = req.body ?? {};
+          const campos = [];
+          if (!Number.isInteger(c.band_id) || c.band_id <= 0) campos.push('band_id');
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(c.show_date ?? '')) campos.push('show_date');
+          if (campos.length) return { status: 422, headers: {}, body: { campos } };
+          return { status: 201, headers: {}, body: await db.inserirShow(c) };
+        }
+    - reason: Para no primeiro campo inválido
+      code: |
+        async function criarShow(req, db) {
+          const c = req.body ?? {};
+          if (!Number.isInteger(c.band_id) || c.band_id <= 0) return { status: 422, headers: {}, body: { campos: ['band_id'] } };
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(c.show_date ?? '')) return { status: 422, headers: {}, body: { campos: ['show_date'] } };
+          const s = await db.inserirShow(c);
+          return { status: 201, headers: { location: `/shows/${s.id}` }, body: s };
+        }
+
+- slug: conserte-chave-de-idempotencia
+  title: Dois cliques, duas cobranças
+  difficulty: dificil
+  kind: js
+  visual: corrida
+  in: [conserte/APIs, apis/REST, more-databases/Failure Modes]
+  study:
+    - { label: "Requisições idempotentes (Stripe, em inglês)", url: "https://docs.stripe.com/api/idempotent_requests" }
+  starter: |
+    function criarIdempotente(criar) {
+      const respostas = new Map();
+      return async function handler(req) {
+        const chave = req.headers['idempotency-key'];
+        if (chave && respostas.has(chave)) return respostas.get(chave);
+        const resposta = await criar(req);
+        if (chave) respostas.set(chave, resposta);
+        return resposta;
+      };
+    }
+  statement: |
+    O app manda o cabeçalho `idempotency-key` em cada compra, para um clique repetido não cobrar duas vezes. Mesmo assim, quando a pessoa clica duas vezes rápido, `criar` roda duas vezes.
+
+    Conserte `criarIdempotente(criar)`, que devolve o `handler` da rota:
+
+    - pedidos com a mesma chave, inclusive simultâneos, chamam `criar` uma vez só e recebem a mesma resposta
+    - pedidos sem chave chamam `criar` sempre
+    - se `criar` falhar, a chave não fica guardada, e uma nova tentativa com ela chama `criar` de novo
+  solution: |
+    function criarIdempotente(criar) {
+      const respostas = new Map();
+      return function handler(req) {
+        const chave = req.headers['idempotency-key'];
+        if (!chave) return Promise.resolve().then(() => criar(req));
+        if (!respostas.has(chave)) {
+          const promessa = Promise.resolve().then(() => criar(req));
+          respostas.set(chave, promessa);
+          promessa.catch(() => respostas.delete(chave));
+        }
+        return respostas.get(chave);
+      };
+    }
+  tests:
+    - name: repetição em sequência
+      code: |
+        const criar = fn(async () => ({ status: 201, body: { pedido: 1 } }));
+        const handler = criarIdempotente(criar);
+        const req = { headers: { 'idempotency-key': 'k1' } };
+        await handler(req);
+        expect(await handler(req)).toEqual({ status: 201, body: { pedido: 1 } });
+        expect(criar).toHaveBeenCalledTimes(1);
+    - name: cliques simultâneos
+      code: |
+        const criar = fn(() => new Promise((r) => setTimeout(() => r({ status: 201 }), 20)));
+        const handler = criarIdempotente(criar);
+        const req = { headers: { 'idempotency-key': 'k2' } };
+        await Promise.all([handler(req), handler(req), handler(req)]);
+        expect(criar).toHaveBeenCalledTimes(1);
+    - name: sem chave
+      hidden: true
+      code: |
+        const criar = fn(async () => ({ status: 201 }));
+        const handler = criarIdempotente(criar);
+        await handler({ headers: {} });
+        await handler({ headers: {} });
+        expect(criar).toHaveBeenCalledTimes(2);
+    - name: falha não fica guardada
+      hidden: true
+      code: |
+        let vez = 0;
+        const criar = fn(async () => { if (++vez === 1) throw new Error('gateway fora'); return { status: 201 }; });
+        const handler = criarIdempotente(criar);
+        const req = { headers: { 'idempotency-key': 'k3' } };
+        await expect(handler(req)).rejects.toMatch('gateway fora');
+        expect(await handler(req)).toEqual({ status: 201 });
+        expect(criar).toHaveBeenCalledTimes(2);
+    - name: chaves diferentes
+      hidden: true
+      code: |
+        const criar = fn(async () => ({ status: 201 }));
+        const handler = criarIdempotente(criar);
+        await handler({ headers: { 'idempotency-key': 'a' } });
+        await handler({ headers: { 'idempotency-key': 'b' } });
+        expect(criar).toHaveBeenCalledTimes(2);
+  hints:
+    - O código atual só guarda a resposta depois do `await`. Enquanto isso, o segundo clique não vê nada guardado.
+    - Guarde a promessa assim que o primeiro pedido chega, antes de ela terminar.
+  explanation: |
+    A janela de corrida está entre a checagem e a gravação. Guardar a promessa em andamento faz os pedidos simultâneos esperarem o mesmo resultado. Em produção, com vários servidores, essa reserva fica num lugar compartilhado, como uma linha única no banco ou uma chave no Redis gravada com `SET NX`.
+  traps:
+    - reason: Guarda a falha para sempre
+      code: |
+        function criarIdempotente(criar) {
+          const m = new Map();
+          return function handler(req) {
+            const k = req.headers['idempotency-key'];
+            if (!k) return Promise.resolve().then(() => criar(req));
+            if (!m.has(k)) m.set(k, Promise.resolve().then(() => criar(req)));
+            return m.get(k);
+          };
+        }

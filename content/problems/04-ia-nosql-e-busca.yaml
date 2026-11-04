@@ -1,0 +1,1160 @@
+- slug: similaridade-de-cosseno
+  title: Quão parecidas são duas músicas
+  difficulty: facil
+  kind: js
+  visual: embeddings-3d
+  in: [ai-basics/Vectors, ai-basics/Embeddings]
+  study:
+    - { label: "Similaridade por cosseno (Wikipédia)", url: "https://pt.wikipedia.org/wiki/Similaridade_por_cosseno" }
+    - { label: "Embeddings (Google, em inglês)", url: "https://developers.google.com/machine-learning/crash-course/embeddings" }
+  statement: |
+    A busca por "parecidas com esta" do app do festival compara embeddings: vetores de números que representam o sentido de um texto. Vetores que apontam na mesma direção têm sentidos parecidos.
+
+    Escreva `cosseno(a, b)`, a similaridade de cosseno: o produto escalar dividido pelo produto dos tamanhos dos vetores. O resultado vai de `-1` a `1`.
+
+    - se um dos vetores for só zeros, devolva `0`
+    - vetores de tamanhos diferentes lançam um erro
+  solution: |
+    function cosseno(a, b) {
+      if (a.length !== b.length) throw new Error('vetores de tamanhos diferentes');
+      let produto = 0;
+      let somaA = 0;
+      let somaB = 0;
+      for (let i = 0; i < a.length; i++) {
+        produto += a[i] * b[i];
+        somaA += a[i] * a[i];
+        somaB += b[i] * b[i];
+      }
+      if (somaA === 0 || somaB === 0) return 0;
+      return produto / (Math.sqrt(somaA) * Math.sqrt(somaB));
+    }
+  tests:
+    - name: mesma direção
+      code: |
+        expect(cosseno([1, 2, 3], [2, 4, 6])).toBeCloseTo(1, 6);
+    - name: perpendiculares e opostos
+      code: |
+        expect(cosseno([1, 0], [0, 1])).toBeCloseTo(0, 6);
+        expect(cosseno([1, 0], [-3, 0])).toBeCloseTo(-1, 6);
+    - name: valor intermediário
+      hidden: true
+      code: |
+        expect(cosseno([1, 1], [1, 0])).toBeCloseTo(Math.SQRT1_2, 6);
+    - name: vetor de zeros
+      hidden: true
+      code: |
+        expect(cosseno([0, 0, 0], [1, 2, 3])).toBe(0);
+    - name: tamanhos diferentes
+      hidden: true
+      code: |
+        expect(() => cosseno([1, 2], [1, 2, 3])).toThrow();
+  hints:
+    - O tamanho de um vetor é a raiz da soma dos quadrados.
+  explanation: |
+    O cosseno compara direções e ignora o tamanho dos vetores, o que interessa para sentido de texto: um parágrafo longo e um curto sobre o mesmo assunto ficam próximos. Muitos modelos devolvem embeddings já normalizados, e aí o cosseno é igual ao produto escalar.
+  traps:
+    - reason: Só o produto escalar
+      code: |
+        function cosseno(a, b) {
+          if (a.length !== b.length) throw new Error('tamanhos');
+          return a.reduce((s, x, i) => s + x * b[i], 0);
+        }
+    - reason: Vetor de zeros dá NaN
+      code: |
+        function cosseno(a, b) {
+          if (a.length !== b.length) throw new Error('tamanhos');
+          let p = 0, x = 0, y = 0;
+          for (let i = 0; i < a.length; i++) { p += a[i] * b[i]; x += a[i] ** 2; y += b[i] ** 2; }
+          return p / Math.sqrt(x * y);
+        }
+
+- slug: vizinhos-mais-proximos
+  title: As cinco bandas mais parecidas
+  difficulty: medio
+  kind: js
+  visual: embeddings-3d
+  in: [ai-basics/Vectors, ai-basics/RAGs]
+  study:
+    - { label: "Busca por vizinhos mais próximos (Wikipédia, em inglês)", url: "https://en.wikipedia.org/wiki/Nearest_neighbor_search" }
+  statement: |
+    Escreva `maisParecidos(consulta, itens, k)`. Cada item é `{ id, vetor }`. Devolva os `id` dos `k` itens com maior similaridade de cosseno com a consulta, do mais parecido para o menos. Em empate, vale a ordem original da lista. Não altere a lista recebida.
+
+    Escreva também a função de cosseno, ou copie a sua do exercício anterior.
+  solution: |
+    function cosseno(a, b) {
+      let p = 0, x = 0, y = 0;
+      for (let i = 0; i < a.length; i++) { p += a[i] * b[i]; x += a[i] ** 2; y += b[i] ** 2; }
+      return x === 0 || y === 0 ? 0 : p / (Math.sqrt(x) * Math.sqrt(y));
+    }
+    function maisParecidos(consulta, itens, k) {
+      return itens
+        .map((item, posicao) => ({ id: item.id, nota: cosseno(consulta, item.vetor), posicao }))
+        .sort((a, b) => b.nota - a.nota || a.posicao - b.posicao)
+        .slice(0, k)
+        .map((item) => item.id);
+    }
+  tests:
+    - name: os mais parecidos primeiro
+      code: |
+        const itens = [
+          { id: 'doom', vetor: [0, 1] },
+          { id: 'thrash', vetor: [1, 0.1] },
+          { id: 'speed', vetor: [1, 0.3] },
+        ];
+        expect(maisParecidos([1, 0], itens, 2)).toEqual(['thrash', 'speed']);
+    - name: k maior que a lista
+      code: |
+        expect(maisParecidos([1, 0], [{ id: 'a', vetor: [1, 0] }], 5)).toEqual(['a']);
+    - name: direção vale mais que tamanho
+      hidden: true
+      code: |
+        const itens = [{ id: 'grande', vetor: [10, 10] }, { id: 'certo', vetor: [0.5, 0] }];
+        expect(maisParecidos([1, 0], itens, 1)).toEqual(['certo']);
+    - name: empate mantém a ordem
+      hidden: true
+      code: |
+        const itens = [{ id: 'b', vetor: [2, 0] }, { id: 'a', vetor: [1, 0] }, { id: 'c', vetor: [0, 1] }];
+        expect(maisParecidos([1, 0], itens, 2)).toEqual(['b', 'a']);
+    - name: não altera a lista
+      hidden: true
+      code: |
+        const itens = [{ id: 'x', vetor: [0, 1] }, { id: 'y', vetor: [1, 0] }];
+        maisParecidos([1, 0], itens, 1);
+        expect(itens.map((i) => i.id)).toEqual(['x', 'y']);
+  hints:
+    - "`sort` em JavaScript é estável, mas ordena a própria lista. Trabalhe numa cópia, como a que `map` cria."
+  explanation: |
+    Esta é a busca exata: compara a consulta com todos os itens. Com milhões de vetores, bancos vetoriais usam índices aproximados, como HNSW, que acham quase sempre os mesmos vizinhos olhando só uma fração dos itens.
+  traps:
+    - reason: Ordena pelo produto escalar
+      code: |
+        function maisParecidos(q, itens, k) {
+          const dot = (v) => v.reduce((s, x, i) => s + x * q[i], 0);
+          return itens.map((it) => ({ id: it.id, n: dot(it.vetor) })).sort((a, b) => b.n - a.n).slice(0, k).map((x) => x.id);
+        }
+    - reason: Ordena a lista recebida
+      code: |
+        function maisParecidos(q, itens, k) {
+          const c = (v) => { let p = 0, x = 0, y = 0; v.forEach((n, i) => { p += n * q[i]; x += n * n; y += q[i] * q[i]; }); return x && y ? p / Math.sqrt(x * y) : 0; };
+          return itens.sort((a, b) => c(b.vetor) - c(a.vetor)).slice(0, k).map((x) => x.id);
+        }
+
+- slug: o-que-e-embedding
+  title: A busca que entende "som pesado"
+  difficulty: facil
+  kind: quiz
+  visual: embeddings-3d
+  in: [ai-basics/Embeddings]
+  study:
+    - { label: "Embeddings (Google, em inglês)", url: "https://developers.google.com/machine-learning/crash-course/embeddings" }
+  statement: |
+    Na busca antiga do app, "som pesado e rápido" não achava nada, porque nenhuma descrição tinha essas palavras. Com embeddings, a mesma busca traz as bandas de thrash metal.
+
+    Por quê?
+  options:
+    - text: Um modelo transforma cada texto num vetor que representa o sentido. Textos com sentidos parecidos ficam perto, mesmo sem palavras em comum
+      why: Certo. A busca compara vetores, não palavras.
+    - text: O embedding é uma lista de sinônimos escrita à mão
+      why: Os vetores são aprendidos por um modelo a partir de muitos textos.
+    - text: A busca passou a ignorar a consulta e mostrar as bandas mais populares
+      why: O resultado depende da consulta, comparada por sentido.
+    - text: Embeddings são o texto comprimido, que pode ser descomprimido de volta
+      why: Um embedding não guarda o texto e não pode ser revertido para ele.
+  answer: 0
+  explanation: |
+    Um embedding é um vetor de centenas ou milhares de números produzido por um modelo treinado. A distância entre vetores aproxima a diferença de sentido. Busca semântica, recomendação e agrupamento usam essa propriedade.
+
+- slug: trocar-modelo-de-embedding
+  title: O modelo novo e os vetores antigos
+  difficulty: medio
+  kind: quiz
+  visual: embeddings-3d
+  in: [ai-basics/Embeddings, ai-basics/Vectors]
+  study:
+    - { label: "Embeddings (OpenAI, em inglês)", url: "https://platform.openai.com/docs/guides/embeddings" }
+  statement: |
+    O time trocou o modelo de embeddings por um mais novo, com vetores do mesmo tamanho. As consultas passaram a usar o modelo novo, mas os 50 mil vetores guardados vieram do antigo. A busca piorou muito.
+
+    O que fazer?
+  options:
+    - text: Recalcular os vetores de todos os documentos com o modelo novo. Vetores de modelos diferentes vivem em espaços diferentes e não podem ser comparados
+      why: Certo. Mesmo com o mesmo tamanho, cada modelo organiza os sentidos de um jeito.
+    - text: Nada, vetores do mesmo tamanho são compatíveis
+      why: O tamanho igual é coincidência. As coordenadas não significam a mesma coisa.
+    - text: Normalizar os vetores antigos
+      why: Normalizar muda o tamanho, não o espaço em que o vetor foi produzido.
+    - text: Voltar a buscar por palavras
+      why: Resolve o sintoma, mas joga fora a busca semântica.
+  answer: 0
+  explanation: |
+    Guarde junto com cada vetor o nome e a versão do modelo que o gerou. Trocar de modelo exige reindexar tudo, de preferência num índice novo, trocando a leitura só quando ele estiver completo.
+
+- slug: banco-vetorial-aproximado
+  title: Milhões de vetores em milissegundos
+  difficulty: medio
+  kind: quiz
+  visual: embeddings-3d
+  in: [ai-basics/Vectors, ai-basics/RAGs]
+  study:
+    - { label: "pgvector: índices HNSW (em inglês)", url: "https://github.com/pgvector/pgvector#hnsw" }
+  statement: |
+    A base de perguntas e respostas do festival cresceu para 10 milhões de trechos. Comparar a consulta com todos os vetores leva segundos.
+
+    O que bancos vetoriais, como pgvector com HNSW, fazem para responder em milissegundos?
+  options:
+    - text: Usam um índice de vizinhos aproximados, que percorre um grafo de vetores próximos e examina só uma fração deles, aceitando perder um vizinho de vez em quando
+      why: Certo. A troca é entre velocidade e recall, ajustável por parâmetros do índice.
+    - text: Guardam a resposta pronta para cada pergunta possível
+      why: As perguntas possíveis são infinitas.
+    - text: Usam um índice B-tree comum
+      why: B-trees ordenam valores escalares e não ajudam a achar vetores próximos em centenas de dimensões.
+    - text: Descartam metade dos vetores aleatoriamente
+      why: Isso perderia resultados sem critério nenhum.
+  answer: 0
+  explanation: |
+    Índices ANN, como HNSW e IVF, organizam os vetores para a busca pular a maior parte deles. O recall mede quantos dos vizinhos verdadeiros aparecem no resultado. Para RAG, um recall de 95% costuma ser suficiente.
+
+- slug: dividir-em-pedacos
+  title: O regulamento em pedaços
+  difficulty: medio
+  kind: js
+  in: [ai-basics/RAGs]
+  study:
+    - { label: "Retrieval-augmented generation (Anthropic, em inglês)", url: "https://www.anthropic.com/news/contextual-retrieval" }
+  statement: |
+    Para o assistente responder dúvidas sobre o regulamento do festival, o texto é cortado em pedaços, e cada pedaço vira um embedding. Pedaços vizinhos se sobrepõem um pouco, para uma frase cortada no meio aparecer inteira em algum deles.
+
+    Escreva `pedacos(texto, tamanho, sobreposicao)`, contando em palavras:
+
+    - cada pedaço tem até `tamanho` palavras, unidas por um espaço
+    - o próximo pedaço começa `tamanho - sobreposicao` palavras depois do anterior
+    - pare quando um pedaço alcançar a última palavra, sem criar pedaços que só repetem o fim
+    - texto vazio dá `[]`
+    - `sobreposicao` maior ou igual a `tamanho` lança um erro
+  solution: |
+    function pedacos(texto, tamanho, sobreposicao) {
+      if (sobreposicao >= tamanho) throw new Error('a sobreposição precisa ser menor que o tamanho');
+      const palavras = texto.split(/\s+/).filter(Boolean);
+      const passo = tamanho - sobreposicao;
+      const resultado = [];
+      for (let inicio = 0; inicio < palavras.length; inicio += passo) {
+        resultado.push(palavras.slice(inicio, inicio + tamanho).join(' '));
+        if (inicio + tamanho >= palavras.length) break;
+      }
+      return resultado;
+    }
+  tests:
+    - name: com sobreposição
+      code: |
+        expect(pedacos('a b c d e f g h i j', 4, 1)).toEqual(['a b c d', 'd e f g', 'g h i j']);
+    - name: sem sobreposição
+      code: |
+        expect(pedacos('a b c d e', 2, 0)).toEqual(['a b', 'c d', 'e']);
+    - name: sem pedaço repetido no fim
+      hidden: true
+      code: |
+        expect(pedacos('a b c d e f', 4, 2)).toEqual(['a b c d', 'c d e f']);
+    - name: espaços extras e texto vazio
+      hidden: true
+      code: |
+        expect(pedacos('  um   dois\ntrês  ', 5, 1)).toEqual(['um dois três']);
+        expect(pedacos('   ', 5, 1)).toEqual([]);
+    - name: sobreposição inválida
+      hidden: true
+      code: |
+        expect(() => pedacos('a b c', 2, 2)).toThrow();
+  hints:
+    - Depois de empurrar um pedaço, se `inicio + tamanho` já passou do fim, pare.
+  explanation: |
+    O tamanho dos pedaços equilibra contexto e precisão: pedaços grandes misturam assuntos, pedaços pequenos perdem contexto. Sistemas reais cortam por frases, parágrafos ou títulos, e contam tokens em vez de palavras, mas a ideia da janela com sobreposição é a mesma.
+  traps:
+    - reason: Cria pedaços que só repetem o fim
+      code: |
+        function pedacos(texto, tamanho, sobreposicao) {
+          if (sobreposicao >= tamanho) throw new Error('x');
+          const p = texto.split(/\s+/).filter(Boolean);
+          const r = [];
+          for (let i = 0; i < p.length; i += tamanho - sobreposicao) r.push(p.slice(i, i + tamanho).join(' '));
+          return r;
+        }
+    - reason: Ignora a sobreposição
+      code: |
+        function pedacos(texto, tamanho, sobreposicao) {
+          if (sobreposicao >= tamanho) throw new Error('x');
+          const p = texto.split(/\s+/).filter(Boolean);
+          const r = [];
+          for (let i = 0; i < p.length; i += tamanho) r.push(p.slice(i, i + tamanho).join(' '));
+          return r;
+        }
+
+- slug: montar-contexto-do-rag
+  title: O que cabe no prompt
+  difficulty: medio
+  kind: js
+  in: [ai-basics/RAGs, ai-integration/Anthropic]
+  study:
+    - { label: "Contextual retrieval (Anthropic, em inglês)", url: "https://www.anthropic.com/news/contextual-retrieval" }
+  statement: |
+    A busca devolveu trechos do regulamento, cada um `{ id, texto, score }`. O prompt tem espaço para `limite` caracteres de contexto.
+
+    Escreva `montarContexto(trechos, limite)`, que devolve os `id` escolhidos, na ordem em que foram escolhidos:
+
+    - percorra os trechos do maior `score` para o menor
+    - um trecho que não cabe no espaço restante é pulado, mas os seguintes, menores, ainda podem caber
+    - trechos com o mesmo `texto` entram uma vez só
+    - não altere a lista recebida
+  solution: |
+    function montarContexto(trechos, limite) {
+      const escolhidos = [];
+      const vistos = new Set();
+      let usado = 0;
+      for (const trecho of [...trechos].sort((a, b) => b.score - a.score)) {
+        if (vistos.has(trecho.texto)) continue;
+        if (usado + trecho.texto.length > limite) continue;
+        escolhidos.push(trecho.id);
+        vistos.add(trecho.texto);
+        usado += trecho.texto.length;
+      }
+      return escolhidos;
+    }
+  tests:
+    - name: maior score primeiro
+      code: |
+        const trechos = [
+          { id: 'menores', texto: 'Menores de 16 anos só com responsável.', score: 0.71 },
+          { id: 'bolsas', texto: 'Bolsas grandes não entram.', score: 0.93 },
+        ];
+        expect(montarContexto(trechos, 1000)).toEqual(['bolsas', 'menores']);
+    - name: respeita o limite
+      code: |
+        const trechos = [
+          { id: 'a', texto: 'x'.repeat(60), score: 0.9 },
+          { id: 'b', texto: 'y'.repeat(50), score: 0.8 },
+        ];
+        expect(montarContexto(trechos, 100)).toEqual(['a']);
+    - name: pula o grande e aproveita o pequeno
+      hidden: true
+      code: |
+        const trechos = [
+          { id: 'a', texto: 'x'.repeat(60), score: 0.9 },
+          { id: 'b', texto: 'y'.repeat(50), score: 0.8 },
+          { id: 'c', texto: 'z'.repeat(30), score: 0.7 },
+        ];
+        expect(montarContexto(trechos, 100)).toEqual(['a', 'c']);
+    - name: textos repetidos
+      hidden: true
+      code: |
+        const trechos = [
+          { id: 'doc1#3', texto: 'Proibido levar guarda-chuva.', score: 0.9 },
+          { id: 'doc2#1', texto: 'Proibido levar guarda-chuva.', score: 0.88 },
+          { id: 'doc1#4', texto: 'Capa de chuva é permitida.', score: 0.6 },
+        ];
+        expect(montarContexto(trechos, 1000)).toEqual(['doc1#3', 'doc1#4']);
+    - name: não altera a lista
+      hidden: true
+      code: |
+        const trechos = [{ id: 'b', texto: 'b', score: 0.1 }, { id: 'a', texto: 'a', score: 0.9 }];
+        montarContexto(trechos, 10);
+        expect(trechos.map((t) => t.id)).toEqual(['b', 'a']);
+  hints:
+    - Use `continue` em vez de `break` quando um trecho não cabe.
+  explanation: |
+    RAG, retrieval-augmented generation, busca trechos relevantes e os coloca no prompt para o modelo responder com base neles. O espaço do contexto é limitado e custa tokens, então escolher bem, sem repetição, melhora a resposta e reduz o custo.
+  traps:
+    - reason: Para no primeiro que não cabe
+      code: |
+        function montarContexto(trechos, limite) {
+          const r = []; const v = new Set(); let u = 0;
+          for (const t of [...trechos].sort((a, b) => b.score - a.score)) {
+            if (v.has(t.texto)) continue;
+            if (u + t.texto.length > limite) break;
+            r.push(t.id); v.add(t.texto); u += t.texto.length;
+          }
+          return r;
+        }
+    - reason: Repete trechos iguais
+      code: |
+        function montarContexto(trechos, limite) {
+          const r = []; let u = 0;
+          for (const t of [...trechos].sort((a, b) => b.score - a.score)) {
+            if (u + t.texto.length > limite) continue;
+            r.push(t.id); u += t.texto.length;
+          }
+          return r;
+        }
+
+- slug: rag-contra-alucinacao
+  title: O assistente que inventou o horário
+  difficulty: medio
+  kind: quiz
+  in: [ai-basics/RAGs, ai-basics/How LLMs work]
+  study:
+    - { label: "Reduzir alucinações (Anthropic, em inglês)", url: "https://docs.claude.com/en/docs/test-and-evaluate/strengthen-guardrails/reduce-hallucinations" }
+  statement: |
+    O assistente do festival respondeu que os portões abrem às 14h. O horário certo, 16h, está no regulamento publicado ontem, que o modelo nunca viu no treinamento.
+
+    Como o RAG resolve, e o que mais ajuda?
+  options:
+    - text: Buscar os trechos do regulamento atual e pôr no prompt, instruindo o modelo a responder só com base neles, citar a fonte e dizer que não sabe quando a informação não estiver lá
+      why: Certo. O modelo passa a responder a partir de documentos atuais, e a instrução reduz respostas inventadas.
+    - text: Treinar um modelo novo toda vez que o regulamento mudar
+      why: É caro e lento. RAG atualiza o conhecimento trocando documentos, sem treinar nada.
+    - text: Aumentar a temperatura para o modelo ser mais criativo
+      why: Temperatura alta aumenta a variação, e com ela a chance de inventar.
+    - text: Não há como, modelos sempre inventam
+      why: Dar o contexto certo e permitir "não sei" reduz muito as invenções.
+  answer: 0
+  explanation: |
+    Modelos de linguagem sabem o que viram no treinamento, até uma data de corte, e completam lacunas com texto plausível. RAG traz o conhecimento atual no momento da pergunta. Citar a fonte deixa a pessoa conferir.
+
+- slug: avaliar-a-busca-do-rag
+  title: A resposta errada com a busca errada
+  difficulty: dificil
+  kind: quiz
+  in: [ai-basics/RAGs, testing/Integration Testing]
+  study:
+    - { label: "Contextual retrieval (Anthropic, em inglês)", url: "https://www.anthropic.com/news/contextual-retrieval" }
+  statement: |
+    O assistente erra algumas perguntas sobre reembolso. Uma pessoa do time quer trocar o modelo por um maior.
+
+    O que conferir antes?
+  options:
+    - text: Se os trechos certos chegaram ao prompt. Com um conjunto de perguntas e os trechos esperados, meça a busca separadamente, por exemplo quantas vezes o trecho certo está entre os k primeiros
+      why: Certo. Se a busca não traz o trecho, nenhum modelo acerta a resposta.
+    - text: Nada, modelos maiores sempre resolvem
+      why: Um modelo maior não sabe o que não está no contexto.
+    - text: Só se o prompt tem a palavra "reembolso"
+      why: A palavra ajuda pouco se a busca devolve os trechos errados.
+    - text: Diminuir o número de trechos para um
+      why: Com menos trechos, a chance de o certo ficar de fora aumenta.
+  answer: 0
+  explanation: |
+    RAG tem duas partes que falham de jeitos diferentes: a busca e a geração. Avaliar a busca com métricas como recall@k e a geração com respostas de referência mostra qual parte corrigir: pedaços, embeddings, reranqueamento ou o prompt.
+
+- slug: filtro-estilo-mongo
+  title: A consulta em documentos
+  difficulty: dificil
+  kind: js
+  in: [nosql/MongoDB]
+  study:
+    - { label: "Operadores de consulta (MongoDB, em inglês)", url: "https://www.mongodb.com/docs/manual/reference/operator/query/" }
+    - { label: "Consultar arrays (MongoDB, em inglês)", url: "https://www.mongodb.com/docs/manual/tutorial/query-arrays/" }
+  statement: |
+    Para entender como o MongoDB consulta documentos, escreva `filtrar(docs, consulta)`, que devolve os documentos que atendem a todas as condições da consulta:
+
+    - `{ genero: 'Thrash' }` compara por igualdade
+    - caminhos com ponto entram em objetos aninhados: `{ 'local.cidade': 'Recife' }`
+    - se o campo for um array, a igualdade vale quando algum item é igual: `{ tags: 'ao vivo' }`
+    - uma condição pode ser um objeto de operadores, todos obrigatórios: `$gt`, `$gte`, `$lt`, `$lte`, `$ne` e `$in`
+    - campos ausentes não atendem `$gt`, `$gte`, `$lt`, `$lte` e `$in`
+  solution: |
+    function filtrar(docs, consulta) {
+      const ler = (doc, caminho) => caminho.split('.').reduce((v, k) => (v == null ? undefined : v[k]), doc);
+      const ehOperador = (c) => c !== null && typeof c === 'object' && !Array.isArray(c);
+      const atende = (valor, condicao) => {
+        if (ehOperador(condicao)) {
+          return Object.entries(condicao).every(([op, alvo]) => {
+            if (op === '$ne') return valor !== alvo;
+            if (valor === undefined) return false;
+            if (op === '$gt') return valor > alvo;
+            if (op === '$gte') return valor >= alvo;
+            if (op === '$lt') return valor < alvo;
+            if (op === '$lte') return valor <= alvo;
+            if (op === '$in') return alvo.includes(valor);
+            throw new Error('operador desconhecido: ' + op);
+          });
+        }
+        if (Array.isArray(valor)) return valor.includes(condicao);
+        return valor === condicao;
+      };
+      return docs.filter((doc) => Object.entries(consulta).every(([caminho, c]) => atende(ler(doc, caminho), c)));
+    }
+  tests:
+    - name: igualdade e caminho aninhado
+      code: |
+        const docs = [
+          { _id: 1, banda: 'Ferro Velho', genero: 'Thrash', local: { cidade: 'Recife' } },
+          { _id: 2, banda: 'Noite Eterna', genero: 'Black', local: { cidade: 'Recife' } },
+          { _id: 3, banda: 'Cinzas', genero: 'Thrash', local: { cidade: 'Natal' } },
+        ];
+        expect(filtrar(docs, { genero: 'Thrash', 'local.cidade': 'Recife' }).map((d) => d._id)).toEqual([1]);
+    - name: operadores de intervalo
+      code: |
+        const docs = [{ _id: 1, preco: 40 }, { _id: 2, preco: 50 }, { _id: 3, preco: 99 }, { _id: 4, preco: 100 }];
+        expect(filtrar(docs, { preco: { $gte: 50, $lt: 100 } }).map((d) => d._id)).toEqual([2, 3]);
+    - name: array contém o valor
+      hidden: true
+      code: |
+        const docs = [{ _id: 1, tags: ['ao vivo', 'acústico'] }, { _id: 2, tags: ['estúdio'] }];
+        expect(filtrar(docs, { tags: 'ao vivo' }).map((d) => d._id)).toEqual([1]);
+    - name: "$in e $ne"
+      hidden: true
+      code: |
+        const docs = [{ _id: 1, setor: 'pista' }, { _id: 2, setor: 'vip' }, { _id: 3, setor: 'camarote' }, { _id: 4 }];
+        expect(filtrar(docs, { setor: { $in: ['vip', 'camarote'] } }).map((d) => d._id)).toEqual([2, 3]);
+        expect(filtrar(docs, { setor: { $ne: 'pista' } }).map((d) => d._id)).toEqual([2, 3, 4]);
+    - name: campo ausente e caminho que quebra no meio
+      hidden: true
+      code: |
+        const docs = [{ _id: 1, local: null }, { _id: 2 }, { _id: 3, local: { capacidade: 5000 } }];
+        expect(filtrar(docs, { 'local.capacidade': { $gt: 1000 } }).map((d) => d._id)).toEqual([3]);
+  hints:
+    - Leia o campo com `caminho.split('.')` e `reduce`, parando quando encontrar `null` ou `undefined`.
+    - Uma condição é de operadores quando é um objeto que não é array.
+  explanation: |
+    No MongoDB, os dados ficam em documentos JSON, e consultas também são documentos. Comparar dentro de arrays e de objetos aninhados é natural nesse modelo, porque um documento costuma guardar junto o que é lido junto, como um show com o local e a lista de atrações.
+  traps:
+    - reason: Não entra em caminhos com ponto
+      code: |
+        function filtrar(docs, consulta) {
+          return docs.filter((d) => Object.entries(consulta).every(([k, c]) => {
+            const v = d[k];
+            if (c && typeof c === 'object' && !Array.isArray(c)) return Object.entries(c).every(([op, a]) => op === '$ne' ? v !== a : v !== undefined && ({ $gt: v > a, $gte: v >= a, $lt: v < a, $lte: v <= a, $in: Array.isArray(a) && a.includes(v) })[op]);
+            return Array.isArray(v) ? v.includes(c) : v === c;
+          }));
+        }
+    - reason: Igualdade não olha dentro de arrays
+      code: |
+        function filtrar(docs, consulta) {
+          const ler = (d, p) => p.split('.').reduce((v, k) => (v == null ? undefined : v[k]), d);
+          return docs.filter((d) => Object.entries(consulta).every(([k, c]) => {
+            const v = ler(d, k);
+            if (c && typeof c === 'object' && !Array.isArray(c)) return Object.entries(c).every(([op, a]) => op === '$ne' ? v !== a : v !== undefined && ({ $gt: v > a, $gte: v >= a, $lt: v < a, $lte: v <= a, $in: Array.isArray(a) && a.includes(v) })[op]);
+            return v === c;
+          }));
+        }
+
+- slug: embutir-ou-referenciar
+  title: O show e seus comentários
+  difficulty: medio
+  kind: quiz
+  in: [nosql/MongoDB, more-databases/Normalization]
+  study:
+    - { label: "Modelagem de dados (MongoDB, em inglês)", url: "https://www.mongodb.com/docs/manual/data-modeling/" }
+  statement: |
+    No MongoDB, cada documento de show guarda o local, as atrações e, até agora, todos os comentários dos fãs. Shows populares passaram de 100 mil comentários, e o documento chegou perto do limite de 16 MB.
+
+    Qual modelagem é melhor?
+  options:
+    - text: Manter embutido o que é pequeno e lido junto, como local e atrações, e mover os comentários para uma coleção própria que referencia o show
+      why: Certo. Listas que crescem sem limite não devem ficar dentro do documento.
+    - text: Embutir tudo sempre, porque é NoSQL
+      why: Embutir é ótimo para dados limitados e lidos juntos. Listas sem limite estouram o documento.
+    - text: Separar cada campo em uma coleção, como numa tabela por coluna
+      why: Isso obriga a juntar tudo a cada leitura e perde a vantagem do documento.
+    - text: Comprimir os comentários dentro do documento
+      why: Adia o limite, mas cada leitura do show ainda carrega todos os comentários.
+  answer: 0
+  explanation: |
+    Em bancos de documentos, a modelagem parte dos padrões de acesso. Dados lidos juntos e de tamanho limitado ficam embutidos. Dados que crescem sem limite, ou que são lidos separadamente, ganham a própria coleção.
+
+- slug: conflito-no-couchdb
+  title: Dois tablets editaram o mesmo credenciado
+  difficulty: medio
+  kind: quiz
+  in: [nosql/CouchDB]
+  study:
+    - { label: "Replicação e conflitos (CouchDB, em inglês)", url: "https://docs.couchdb.org/en/stable/replication/conflicts.html" }
+  statement: |
+    Os tablets do credenciamento usam um banco local que sincroniza com o CouchDB quando há internet. Dois tablets, offline, alteraram o mesmo documento. Na sincronização, o CouchDB não perdeu nenhuma das versões.
+
+    Como ele lida com isso?
+  options:
+    - text: Cada versão tem um _rev. O CouchDB escolhe uma vencedora de forma determinística, guarda a outra como conflito, e o aplicativo decide como juntar
+      why: Certo. Ele foi feito para replicar entre bancos que ficam offline, e trata conflitos como dado, não como erro.
+    - text: Ele apaga as duas versões
+      why: Nenhuma versão é perdida. A perdedora fica disponível como conflito.
+    - text: Ele trava os dois tablets até alguém resolver
+      why: Os bancos continuam funcionando. O conflito é resolvido depois.
+    - text: Isso não acontece, porque o CouchDB não sincroniza
+      why: Replicação entre bancos é a principal característica do CouchDB.
+  answer: 0
+  explanation: |
+    CouchDB guarda documentos JSON, fala HTTP e replica entre servidores e dispositivos, com bibliotecas como PouchDB no navegador. A estratégia offline-first aceita escritas sem rede e reconcilia depois. Ao gravar com um _rev desatualizado no mesmo servidor, ele responde 409 Conflict.
+
+- slug: ranking-no-redis
+  title: O placar da votação do público
+  difficulty: medio
+  kind: quiz
+  visual: cache-aside
+  in: [nosql/Redis, caching/Redis]
+  study:
+    - { label: "Sorted sets (Redis, em inglês)", url: "https://redis.io/docs/latest/develop/data-types/sorted-sets/" }
+  statement: |
+    O telão mostra, ao vivo, as 10 bandas mais votadas pelo público. São milhares de votos por segundo.
+
+    Qual estrutura do Redis serve melhor?
+  options:
+    - text: Um sorted set, em que cada voto faz ZINCRBY na banda e o telão lê os 10 maiores com ZRANGE ... REV, as duas operações em tempo logarítmico
+      why: Certo. O sorted set mantém os itens ordenados pela pontuação a cada mudança.
+    - text: Uma string com um JSON de todas as bandas, lida, alterada e gravada a cada voto
+      why: Ler e regravar o JSON inteiro é lento e perde votos quando dois chegam juntos.
+    - text: Uma lista com um item por voto, contada no fim
+      why: A lista cresce sem limite, e contar exige percorrer tudo.
+    - text: O Redis não serve para isso
+      why: Rankings em tempo real são um dos usos mais conhecidos do Redis.
+  answer: 0
+  explanation: |
+    O Redis é um banco chave-valor em memória com estruturas prontas: strings, hashes, listas, sets, sorted sets e streams. Cada comando é atômico, então votos simultâneos não se perdem. Ele também é usado como cache, fila e para limites de taxa.
+
+- slug: chave-no-dynamodb
+  title: As perguntas que a tabela responde
+  difficulty: dificil
+  kind: quiz
+  in: [nosql/DynamoDB]
+  study:
+    - { label: "Boas práticas de chaves de partição (AWS)", url: "https://docs.aws.amazon.com/pt_br/amazondynamodb/latest/developerguide/bp-partition-key-design.html" }
+  statement: |
+    A tabela de ingressos no DynamoDB precisa responder: "os ingressos de um comprador, do mais recente para o mais antigo". A primeira versão usou `ticket_id` como chave de partição, e essa consulta passou a varrer a tabela inteira.
+
+    Qual desenho de chave atende?
+  options:
+    - text: Chave de partição com o id do comprador e chave de ordenação com a data da compra. A consulta lê uma partição só, já em ordem
+      why: Certo. No DynamoDB, as chaves são desenhadas a partir das consultas que a aplicação faz.
+    - text: Manter ticket_id e usar Scan com filtro
+      why: Scan lê a tabela inteira e cobra por tudo que lê.
+    - text: Chave de partição com o status do ingresso
+      why: Poucos valores concentram os dados em poucas partições, as partições quentes.
+    - text: Pôr todos os ingressos num item só
+      why: Itens têm limite de 400 KB, e um item só vira gargalo.
+  answer: 0
+  explanation: |
+    DynamoDB é um banco chave-valor e de documentos gerenciado pela AWS, com latência previsível em qualquer escala. Em troca, só consultas pela chave são eficientes. Por isso a modelagem começa listando os padrões de acesso, e índices secundários atendem os demais.
+
+- slug: regras-do-firebase
+  title: O app que grava direto no banco
+  difficulty: medio
+  kind: quiz
+  in: [nosql/Firebase, web-security/OWASP Risks]
+  study:
+    - { label: "Regras de segurança do Firebase", url: "https://firebase.google.com/docs/rules?hl=pt-br" }
+  statement: |
+    O app de votação grava os votos direto no Firestore, sem passar por uma API própria, e as telas atualizam em tempo real. Um fã abriu o console do navegador e apagou os votos de todo mundo.
+
+    O que faltou?
+  options:
+    - text: Regras de segurança do Firebase, que rodam no servidor e dizem quem pode ler e escrever cada documento, por exemplo só o próprio voto e só uma vez
+      why: Certo. Quando o cliente fala direto com o banco, as regras são o único controle de acesso.
+    - text: Esconder a configuração do Firebase no código do app
+      why: A configuração do cliente é pública por natureza. A proteção vem das regras.
+    - text: Desligar o tempo real
+      why: O problema é a permissão de escrita, não as atualizações ao vivo.
+    - text: Trocar o Firestore por outro banco
+      why: Qualquer banco acessado direto pelo cliente precisaria das mesmas regras.
+  answer: 0
+  explanation: |
+    Firebase oferece bancos em tempo real, autenticação e hospedagem, e o app acessa o banco sem um backend próprio. Isso acelera o desenvolvimento, mas transfere a segurança para as regras, que precisam ser testadas como qualquer código.
+
+- slug: changefeed-do-rethinkdb
+  title: O painel que se atualiza sozinho
+  difficulty: medio
+  kind: quiz
+  in: [nosql/RethinkDB, real-time/WebSockets]
+  study:
+    - { label: "Changefeeds (RethinkDB, em inglês)", url: "https://rethinkdb.com/docs/changefeeds/javascript/" }
+  statement: |
+    O painel da produção consultava a lotação de cada setor a cada 2 segundos. Com o RethinkDB, uma consulta com `.changes()` passou a entregar cada mudança assim que acontece.
+
+    Qual afirmação é correta?
+  options:
+    - text: É um changefeed. O banco empurra as mudanças para quem está ouvindo, e o servidor repassa ao painel, por exemplo por WebSocket, sem consultas repetidas
+      why: Certo. O RethinkDB foi pensado para aplicações em tempo real, com changefeeds no centro.
+    - text: O banco faz a mesma consulta a cada 2 segundos por baixo dos panos
+      why: 'O changefeed é orientado a eventos: a mudança é enviada quando acontece.'
+    - text: Changefeeds só funcionam no navegador
+      why: Eles rodam no servidor, que mantém a conexão com o banco.
+    - text: O RethinkDB é um banco relacional
+      why: É um banco de documentos JSON, com uma linguagem de consulta própria, o ReQL.
+  answer: 0
+  explanation: |
+    O RethinkDB popularizou o modelo push em bancos de documentos. O projeto continua aberto e mantido pela comunidade. Ideias parecidas existem no MongoDB, com change streams, e no PostgreSQL, com LISTEN e NOTIFY.
+
+- slug: modelar-no-cassandra
+  title: A tabela pensada a partir da consulta
+  difficulty: dificil
+  kind: quiz
+  visual: cluster-3d
+  in: [nosql/Cassandra, nosql/ScyllaDB]
+  study:
+    - { label: "Modelagem de dados (Cassandra, em inglês)", url: "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/intro.html" }
+  statement: |
+    Os leitores dos portões gravam milhões de check-ins por hora no Cassandra. O painel precisa de "os check-ins de um portão num dia, em ordem de horário". A consulta por portão e dia foi recusada pela tabela atual, que tem só `id` como chave.
+
+    Como resolver no Cassandra?
+  options:
+    - text: Criar uma tabela com chave de partição (portão, dia) e coluna de agrupamento horário. No Cassandra, cada consulta costuma ter a própria tabela, e duplicar dados é normal
+      why: Certo. A consulta lê uma partição, já ordenada. O mesmo vale no ScyllaDB, que é compatível com o Cassandra.
+    - text: Fazer um JOIN com a tabela de portões
+      why: O Cassandra não tem JOIN.
+    - text: Usar ALLOW FILTERING em produção
+      why: Isso força varrer as partições, e fica mais lento conforme os dados crescem.
+    - text: Criar um índice em cada coluna
+      why: Índices secundários no Cassandra têm custos altos e não substituem a modelagem pela consulta.
+  answer: 0
+  explanation: |
+    Cassandra e ScyllaDB são bancos de colunas largas, distribuídos e sem ponto único de falha, feitos para escritas massivas. A chave de partição decide em qual nó o dado fica, e as colunas de agrupamento ordenam os dados dentro da partição. O ScyllaDB reescreve o Cassandra em C++, com um modelo de um núcleo por fragmento.
+
+- slug: quorum-de-leitura
+  title: Gravei e não li
+  difficulty: dificil
+  kind: quiz
+  visual: cluster-3d
+  in: [nosql/Cassandra, nosql/ScyllaDB, scaling-databases/CAP Theorem]
+  study:
+    - { label: "Consistência ajustável (ScyllaDB, em inglês)", url: "https://docs.scylladb.com/manual/stable/architecture/architecture-fault-tolerance.html" }
+  statement: |
+    A tabela tem 3 réplicas. A escrita usa nível de consistência ONE, que espera uma réplica, e a leitura também usa ONE. Às vezes, uma leitura logo depois da escrita não acha o dado.
+
+    Que combinação garante ler o que acabou de ser gravado?
+  options:
+    - text: Escrita e leitura com QUORUM, 2 de 3 réplicas. Como 2 + 2 é maior que 3, toda leitura encontra ao menos uma réplica com a escrita mais recente
+      why: Certo. A regra geral é R + W > N.
+    - text: Escrita ONE e leitura ONE, só que mais rápidas
+      why: 1 + 1 não passa de 3. A leitura pode ir a uma réplica que ainda não recebeu o dado.
+    - text: Escrita ALL e leitura ALL, sem nenhuma desvantagem
+      why: Garante, mas qualquer réplica fora do ar impede escritas e leituras.
+    - text: Não há como, bancos distribuídos nunca são consistentes
+      why: A consistência é ajustável por operação, trocando latência e disponibilidade.
+  answer: 0
+  explanation: |
+    Em Cassandra e ScyllaDB, cada operação escolhe quantas réplicas precisam responder. Com R + W > N, os conjuntos de leitura e escrita sempre se cruzam. Níveis menores respondem mais rápido e toleram mais falhas, ao custo de leituras possivelmente desatualizadas.
+
+- slug: colunar-para-analise
+  title: O relatório que derrubava o banco de vendas
+  difficulty: medio
+  kind: quiz
+  in: [nosql/ClickHouse]
+  study:
+    - { label: "O que é um banco colunar (ClickHouse, em inglês)", url: "https://clickhouse.com/docs/intro" }
+  statement: |
+    O relatório "faturamento por dia, setor e cidade dos últimos 3 anos" lê 2 bilhões de vendas no PostgreSQL de produção e deixa a API lenta durante a execução.
+
+    Por que um banco colunar, como o ClickHouse, combina com esse relatório?
+  options:
+    - text: Ele guarda cada coluna separada e comprimida, então a agregação lê só as colunas usadas, e processa muitas linhas por vez. Fica separado do banco transacional, que segue atendendo a API
+      why: Certo. Bancos colunares são feitos para análises sobre grandes volumes, o OLAP.
+    - text: Ele é melhor para atualizar uma venda de cada vez
+      why: Atualizações pontuais são o ponto fraco dos colunares. Isso é trabalho do banco transacional.
+    - text: Ele dispensa copiar os dados
+      why: Os dados precisam ser levados até ele, por carga periódica ou por streaming.
+    - text: Ele guarda tudo em memória, sem disco
+      why: O ClickHouse guarda em disco, com compressão, e lê só o necessário.
+  answer: 0
+  explanation: |
+    Bancos orientados a linhas guardam cada registro junto, o ideal para ler e gravar uma venda. Bancos colunares guardam cada coluna junto, o ideal para somar uma coluna em bilhões de linhas. Separar OLTP de OLAP evita que relatórios disputem recursos com os clientes.
+
+- slug: reduzir-resolucao
+  title: Médias de cinco minutos
+  difficulty: medio
+  kind: js
+  in: [nosql/Influx DB, nosql/TimescaleDB]
+  study:
+    - { label: "Downsampling (InfluxDB, em inglês)", url: "https://docs.influxdata.com/influxdb/v2/process-data/common-tasks/downsample-data/" }
+    - { label: "time_bucket (TimescaleDB, em inglês)", url: "https://docs.timescale.com/api/latest/hyperfunctions/time_bucket/" }
+  statement: |
+    Os sensores de lotação mandam um ponto por segundo. Para guardar meses de histórico, o painel agrega em janelas fixas.
+
+    Escreva `reduzirResolucao(pontos, janela)`. Cada ponto é `{ t, valor }`, com `t` em milissegundos. Devolva `{ t, media, quantidade }` para cada janela que tem pontos, em ordem de `t`. O `t` de cada janela é o início dela, alinhado em múltiplos de `janela`: com janela de 300000, um ponto em 310000 cai na janela que começa em 300000. Os pontos podem chegar fora de ordem.
+  solution: |
+    function reduzirResolucao(pontos, janela) {
+      const grupos = new Map();
+      for (const { t, valor } of pontos) {
+        const inicio = Math.floor(t / janela) * janela;
+        const g = grupos.get(inicio) ?? { soma: 0, quantidade: 0 };
+        g.soma += valor;
+        g.quantidade += 1;
+        grupos.set(inicio, g);
+      }
+      return [...grupos.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([t, g]) => ({ t, media: g.soma / g.quantidade, quantidade: g.quantidade }));
+    }
+  tests:
+    - name: duas janelas
+      code: |
+        const pontos = [{ t: 0, valor: 10 }, { t: 1000, valor: 20 }, { t: 5000, valor: 40 }];
+        expect(reduzirResolucao(pontos, 5000)).toEqual([
+          { t: 0, media: 15, quantidade: 2 },
+          { t: 5000, media: 40, quantidade: 1 },
+        ]);
+    - name: sem pontos
+      code: |
+        expect(reduzirResolucao([], 1000)).toEqual([]);
+    - name: janelas alinhadas
+      hidden: true
+      code: |
+        const pontos = [{ t: 310000, valor: 1 }, { t: 599999, valor: 3 }, { t: 600000, valor: 9 }];
+        expect(reduzirResolucao(pontos, 300000)).toEqual([
+          { t: 300000, media: 2, quantidade: 2 },
+          { t: 600000, media: 9, quantidade: 1 },
+        ]);
+    - name: fora de ordem e janelas vazias
+      hidden: true
+      code: |
+        const pontos = [{ t: 9500, valor: 5 }, { t: 100, valor: 1 }, { t: 9000, valor: 7 }];
+        expect(reduzirResolucao(pontos, 1000)).toEqual([
+          { t: 0, media: 1, quantidade: 1 },
+          { t: 9000, media: 6, quantidade: 2 },
+        ]);
+  hints:
+    - "`Math.floor(t / janela) * janela` dá o início da janela."
+  explanation: |
+    Bancos de séries temporais, como InfluxDB e TimescaleDB, guardam dados com marca de tempo em grande volume. Políticas de retenção apagam os pontos brutos depois de um tempo, e tarefas de downsampling guardam as médias. No TimescaleDB, uma extensão do PostgreSQL, isso se escreve com `time_bucket`.
+  traps:
+    - reason: Janelas a partir do primeiro ponto
+      code: |
+        function reduzirResolucao(pontos, janela) {
+          if (!pontos.length) return [];
+          const base = Math.min(...pontos.map((p) => p.t));
+          const g = new Map();
+          for (const p of pontos) { const i = base + Math.floor((p.t - base) / janela) * janela; const x = g.get(i) ?? { s: 0, n: 0 }; x.s += p.valor; x.n++; g.set(i, x); }
+          return [...g].sort((a, b) => a[0] - b[0]).map(([t, x]) => ({ t, media: x.s / x.n, quantidade: x.n }));
+        }
+    - reason: Não ordena as janelas
+      code: |
+        function reduzirResolucao(pontos, janela) {
+          const g = new Map();
+          for (const p of pontos) { const i = Math.floor(p.t / janela) * janela; const x = g.get(i) ?? { s: 0, n: 0 }; x.s += p.valor; x.n++; g.set(i, x); }
+          return [...g].map(([t, x]) => ({ t, media: x.s / x.n, quantidade: x.n }));
+        }
+
+- slug: entradas-a-cada-meia-hora
+  title: Entradas a cada meia hora
+  difficulty: dificil
+  kind: sql
+  in: [nosql/TimescaleDB, relational-databases/Joins e agregações]
+  study:
+    - { label: "Funções de data (SQLite)", url: "https://www.sqlite.org/lang_datefunc.html" }
+    - { label: "time_bucket (TimescaleDB, em inglês)", url: "https://docs.timescale.com/api/latest/hyperfunctions/time_bucket/" }
+  statement: |
+    No TimescaleDB, `time_bucket('30 minutes', scanned_at)` agrupa por janelas de meia hora. O SQLite não tem essa função, mas dá para chegar no mesmo resultado com segundos desde 1970.
+
+    Conte as entradas de `checkins` por janela de 30 minutos. Mostre `inicio`, no formato `AAAA-MM-DD HH:MM:SS`, e `entradas`, em ordem de `inicio`.
+  ordered: true
+  solution: |
+    SELECT datetime((CAST(strftime('%s', scanned_at) AS INTEGER) / 1800) * 1800, 'unixepoch') AS inicio,
+           COUNT(*) AS entradas
+    FROM checkins
+    GROUP BY inicio
+    ORDER BY inicio;
+  hints:
+    - "`strftime('%s', data)` dá os segundos desde 1970. Divisão inteira por 1800 e multiplicação por 1800 alinham na meia hora."
+    - "`datetime(segundos, 'unixepoch')` volta para o formato de data."
+  explanation: |
+    Agrupar o tempo em janelas fixas é a operação mais comum em séries temporais. O TimescaleDB transforma uma tabela PostgreSQL em hypertable, particionada por tempo, e acrescenta funções como `time_bucket`. A lógica é a mesma desta consulta: alinhar cada momento ao início da janela.
+  traps:
+    - { reason: "Agrupa por hora", code: "SELECT strftime('%Y-%m-%d %H:00:00', scanned_at) AS inicio, COUNT(*) AS entradas FROM checkins GROUP BY inicio ORDER BY inicio;" }
+
+- slug: discipulos-em-grafo
+  title: Quem aprendeu com quem
+  difficulty: dificil
+  kind: sql
+  in: [nosql/Neo4j, relational-databases/Joins e agregações]
+  study:
+    - { label: "WITH RECURSIVE (SQLite)", url: "https://www.sqlite.org/lang_with.html#recursive_common_table_expressions" }
+    - { label: "Cypher: caminhos de tamanho variável (Neo4j, em inglês)", url: "https://neo4j.com/docs/cypher-manual/current/patterns/variable-length-patterns/" }
+  statement: |
+    Na tabela `members`, `mentor_id` diz quem ensinou cada músico. No Neo4j, a pergunta "quem aprendeu, direta ou indiretamente, com Ana Ferro" seria um caminho de tamanho variável. Em SQL, ela é uma consulta recursiva.
+
+    Liste o `name` de cada discípulo de `Ana Ferro` e o `nivel`: 1 para quem aprendeu direto com ela, 2 para os alunos desses, e assim por diante. Ordene por nível e nome.
+  ordered: true
+  solution: |
+    WITH RECURSIVE discipulos(id, name, nivel) AS (
+      SELECT m.id, m.name, 1 FROM members m
+      JOIN members a ON m.mentor_id = a.id
+      WHERE a.name = 'Ana Ferro'
+      UNION ALL
+      SELECT m.id, m.name, d.nivel + 1 FROM members m
+      JOIN discipulos d ON m.mentor_id = d.id
+    )
+    SELECT name, nivel FROM discipulos ORDER BY nivel, name;
+  hints:
+    - A parte de cima do `WITH RECURSIVE` pega os alunos diretos. A de baixo junta `members` com os discípulos já encontrados.
+  explanation: |
+    Hierarquias e redes são grafos. Bancos relacionais percorrem grafos com consultas recursivas, que funcionam bem em hierarquias rasas. Bancos de grafos, como Neo4j, guardam as ligações diretamente e percorrem caminhos longos e variados com mais naturalidade, em linguagens como Cypher.
+  traps:
+    - { reason: "Só dois níveis, com joins fixos", code: "SELECT m.name, 1 AS nivel FROM members m JOIN members a ON m.mentor_id = a.id WHERE a.name = 'Ana Ferro' UNION ALL SELECT m2.name, 2 FROM members m2 JOIN members m ON m2.mentor_id = m.id JOIN members a ON m.mentor_id = a.id WHERE a.name = 'Ana Ferro' ORDER BY nivel, name;" }
+
+- slug: graus-de-separacao
+  title: Quantos passos entre duas bandas
+  difficulty: medio
+  kind: js
+  in: [nosql/AWS Neptune, nosql/DGraph, nosql/Neo4j]
+  study:
+    - { label: "Busca em largura (Wikipédia)", url: "https://pt.wikipedia.org/wiki/Busca_em_largura" }
+  statement: |
+    Duas bandas estão ligadas quando dividiram um músico. O app quer mostrar "Ferro Velho está a 2 passos de Iron Tide".
+
+    Escreva `separacao(ligacoes, origem, destino)`. `ligacoes` é uma lista de pares `[a, b]`, e cada ligação vale nos dois sentidos. Devolva o menor número de passos, `0` se origem e destino forem a mesma banda, ou `-1` se não houver caminho.
+  solution: |
+    function separacao(ligacoes, origem, destino) {
+      if (origem === destino) return 0;
+      const vizinhos = new Map();
+      for (const [a, b] of ligacoes) {
+        if (!vizinhos.has(a)) vizinhos.set(a, []);
+        if (!vizinhos.has(b)) vizinhos.set(b, []);
+        vizinhos.get(a).push(b);
+        vizinhos.get(b).push(a);
+      }
+      const visitados = new Set([origem]);
+      let fronteira = [origem];
+      for (let passos = 1; fronteira.length; passos++) {
+        const proxima = [];
+        for (const no of fronteira) {
+          for (const v of vizinhos.get(no) ?? []) {
+            if (v === destino) return passos;
+            if (!visitados.has(v)) {
+              visitados.add(v);
+              proxima.push(v);
+            }
+          }
+        }
+        fronteira = proxima;
+      }
+      return -1;
+    }
+  tests:
+    - name: dois passos
+      code: |
+        const l = [['Ferro Velho', 'Noite Eterna'], ['Noite Eterna', 'Iron Tide']];
+        expect(separacao(l, 'Ferro Velho', 'Iron Tide')).toBe(2);
+    - name: mesma banda e sem caminho
+      code: |
+        const l = [['A', 'B'], ['C', 'D']];
+        expect(separacao(l, 'A', 'A')).toBe(0);
+        expect(separacao(l, 'A', 'D')).toBe(-1);
+    - name: o menor caminho
+      hidden: true
+      code: |
+        const l = [['A', 'B'], ['B', 'C'], ['C', 'D'], ['D', 'E'], ['A', 'E']];
+        expect(separacao(l, 'A', 'D')).toBe(2);
+    - name: ligação nos dois sentidos
+      hidden: true
+      code: |
+        expect(separacao([['B', 'A']], 'A', 'B')).toBe(1);
+    - name: com ciclos
+      hidden: true
+      code: |
+        const l = [['A', 'B'], ['B', 'C'], ['C', 'A'], ['C', 'X']];
+        expect(separacao(l, 'A', 'X')).toBe(2);
+        expect(separacao(l, 'A', 'Z')).toBe(-1);
+  hints:
+    - A busca em largura visita primeiro todos os vizinhos a 1 passo, depois os a 2, e assim por diante. O primeiro encontro é o menor caminho.
+    - Marque os visitados para não andar em círculos.
+  explanation: |
+    Bancos de grafos, como Neo4j, Amazon Neptune e Dgraph, guardam nós e arestas e fazem esse tipo de percurso de forma nativa, com linguagens como Cypher, Gremlin, SPARQL ou DQL. Eles brilham quando as perguntas são sobre ligações: recomendações, fraudes, redes sociais.
+  traps:
+    - reason: Ligações em um sentido só
+      code: |
+        function separacao(l, o, d) {
+          if (o === d) return 0;
+          const viz = new Map();
+          for (const [a, b] of l) viz.set(a, [...(viz.get(a) ?? []), b]);
+          let f = [o]; const vis = new Set([o]);
+          for (let p = 1; f.length; p++) { const n = []; for (const x of f) for (const v of viz.get(x) ?? []) { if (v === d) return p; if (!vis.has(v)) { vis.add(v); n.push(v); } } f = n; }
+          return -1;
+        }
+    - reason: Busca em profundidade devolve o primeiro caminho, não o menor
+      code: |
+        function separacao(l, o, d) {
+          if (o === d) return 0;
+          const viz = new Map();
+          for (const [a, b] of l) { viz.set(a, [...(viz.get(a) ?? []), b]); viz.set(b, [...(viz.get(b) ?? []), a]); }
+          const vis = new Set();
+          const dfs = (x, p) => { if (x === d) return p; vis.add(x); for (const v of viz.get(x) ?? []) if (!vis.has(v)) { const r = dfs(v, p + 1); if (r >= 0) return r; } return -1; };
+          return dfs(o, 0);
+        }
+
+- slug: banco-de-grafos-gerenciado
+  title: Fraude na revenda de ingressos
+  difficulty: medio
+  kind: quiz
+  in: [nosql/AWS Neptune, nosql/Neo4j]
+  study:
+    - { label: "O que é o Amazon Neptune (AWS)", url: "https://docs.aws.amazon.com/pt_br/neptune/latest/userguide/intro.html" }
+  statement: |
+    O antifraude quer achar grupos de contas que compram ingressos com o mesmo cartão, o mesmo aparelho ou o mesmo endereço, em cadeias de várias ligações. No banco relacional, cada nível a mais é um JOIN a mais, e a consulta ficou lenta.
+
+    Por que um banco de grafos, como o Amazon Neptune ou o Neo4j, ajuda?
+  options:
+    - text: Ele guarda as ligações como arestas e percorre caminhos de vários passos sem JOINs, com linguagens como Gremlin e openCypher
+      why: Certo. Percorrer relações é o forte dos bancos de grafos.
+    - text: Ele é sempre mais rápido que bancos relacionais, para qualquer consulta
+      why: Para somar vendas por mês, um banco relacional ou colunar costuma ser melhor.
+    - text: Ele dispensa modelar os dados
+      why: Ainda é preciso decidir o que é nó, o que é aresta e quais propriedades cada um tem.
+    - text: Ele só guarda imagens
+      why: Ele guarda nós, arestas e propriedades.
+  answer: 0
+  explanation: |
+    O Amazon Neptune é um banco de grafos gerenciado pela AWS, compatível com Gremlin, openCypher e SPARQL. O Neo4j é o banco de grafos mais conhecido, com a linguagem Cypher. O Dgraph é distribuído e usa uma variação de GraphQL.
+
+- slug: dgraph-e-graphql
+  title: Um banco que responde GraphQL
+  difficulty: medio
+  kind: quiz
+  in: [nosql/DGraph, apis/GraphQL]
+  study:
+    - { label: "Dgraph no GitHub (em inglês)", url: "https://github.com/dgraph-io/dgraph" }
+  statement: |
+    O time está avaliando o Dgraph para guardar bandas, músicos e shows. A documentação diz que ele aceita GraphQL diretamente.
+
+    O que isso significa na prática?
+  options:
+    - text: O Dgraph é um banco de grafos distribuído que gera uma API GraphQL a partir do esquema, sem um servidor intermediário traduzindo para SQL
+      why: 'Certo. O modelo de grafo e o GraphQL combinam: os dois pensam em nós e relações.'
+    - text: GraphQL é a linguagem que todo banco de grafos usa
+      why: Neo4j usa Cypher, Neptune usa Gremlin, openCypher e SPARQL. O Dgraph é um caso particular.
+    - text: O Dgraph não guarda dados, só repassa consultas
+      why: Ele é um banco de dados completo, com armazenamento e replicação.
+    - text: Isso dispensa autenticação na API
+      why: Uma API exposta continua precisando de autenticação e regras de acesso.
+  answer: 0
+  explanation: |
+    Bancos de grafos diferem na linguagem e na arquitetura. O Dgraph foi feito para escalar horizontalmente, com GraphQL e a linguagem DQL. A escolha entre eles depende do volume, da linguagem que o time conhece e dos serviços gerenciados disponíveis.
+
+- slug: indice-invertido
+  title: A busca por palavras do catálogo
+  difficulty: dificil
+  kind: js
+  in: [search-engines/Elasticsearch, search-engines/Solr]
+  study:
+    - { label: "Índice invertido (Wikipédia, em inglês)", url: "https://en.wikipedia.org/wiki/Inverted_index" }
+    - { label: "String.normalize (MDN)", url: "https://developer.mozilla.org/pt-BR/docs/Web/JavaScript/Reference/Global_Objects/String/normalize" }
+  statement: |
+    Motores de busca, como Elasticsearch e Solr, guardam um índice invertido: para cada termo, a lista de documentos que o contêm. Escreva `criarBusca(docs)`, que monta o índice uma vez e devolve `buscar(consulta)`.
+
+    - cada doc é `{ id, texto }`, com `id` numérico
+    - termos são sequências de letras e dígitos, em minúsculas e sem acentos: `São Paulo` vira `sao` e `paulo`
+    - `buscar` devolve os `id` dos docs que têm todos os termos da consulta, em ordem crescente
+    - um termo precisa ser igual, não basta aparecer dentro de outra palavra: `rock` não acha `rockabilly`
+    - consulta sem termos devolve `[]`
+  solution: |
+    function criarBusca(docs) {
+      const termos = (texto) =>
+        texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const indice = new Map();
+      for (const doc of docs) {
+        for (const termo of new Set(termos(doc.texto))) {
+          if (!indice.has(termo)) indice.set(termo, new Set());
+          indice.get(termo).add(doc.id);
+        }
+      }
+      return function buscar(consulta) {
+        const lista = [...new Set(termos(consulta))];
+        if (!lista.length) return [];
+        let resultado = null;
+        for (const termo of lista) {
+          const ids = indice.get(termo) ?? new Set();
+          resultado = resultado === null ? [...ids] : resultado.filter((id) => ids.has(id));
+        }
+        return resultado.sort((a, b) => a - b);
+      };
+    }
+  tests:
+    - name: todos os termos
+      code: |
+        const buscar = criarBusca([
+          { id: 2, texto: 'Thrash metal de São Paulo' },
+          { id: 1, texto: 'Black metal do Recife' },
+          { id: 3, texto: 'Thrash de Belo Horizonte' },
+        ]);
+        expect(buscar('thrash metal')).toEqual([2]);
+        expect(buscar('METAL')).toEqual([1, 2]);
+    - name: sem acentos
+      code: |
+        const buscar = criarBusca([{ id: 7, texto: 'Turnê em São Paulo' }]);
+        expect(buscar('sao paulo')).toEqual([7]);
+        expect(buscar('turne')).toEqual([7]);
+    - name: palavra inteira
+      hidden: true
+      code: |
+        const buscar = criarBusca([{ id: 1, texto: 'Noite de rockabilly' }, { id: 2, texto: 'Rock, suor e cerveja!' }]);
+        expect(buscar('rock')).toEqual([2]);
+    - name: consultas vazias e termos ausentes
+      hidden: true
+      code: |
+        const buscar = criarBusca([{ id: 1, texto: 'Doom metal' }]);
+        expect(buscar('  ...  ')).toEqual([]);
+        expect(buscar('doom jazz')).toEqual([]);
+    - name: ids em ordem
+      hidden: true
+      code: |
+        const buscar = criarBusca([{ id: 10, texto: 'metal' }, { id: 2, texto: 'metal' }, { id: 33, texto: 'metal metal' }]);
+        expect(buscar('metal')).toEqual([2, 10, 33]);
+  hints:
+    - "`normalize('NFD')` separa as letras dos acentos, e `replace(/[\\u0300-\\u036f]/g, '')` remove os acentos."
+    - Com um conjunto de ids por termo, a busca é a interseção dos conjuntos.
+  explanation: |
+    O índice invertido troca trabalho na escrita por velocidade na leitura: a busca consulta listas prontas em vez de ler todos os textos. A análise do texto, com tokenização, minúsculas e remoção de acentos, precisa ser igual na indexação e na consulta, senão os termos não se encontram.
+  traps:
+    - reason: Procura dentro do texto, sem índice
+      code: |
+        function criarBusca(docs) {
+          const norm = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+          return (q) => {
+            const ts = norm(q).split(/[^a-z0-9]+/).filter(Boolean);
+            if (!ts.length) return [];
+            return docs.filter((d) => ts.every((t) => norm(d.texto).includes(t))).map((d) => d.id).sort((a, b) => a - b);
+          };
+        }
+    - reason: Não remove os acentos
+      code: |
+        function criarBusca(docs) {
+          const ts = (t) => t.toLowerCase().split(/[^a-z0-9à-ú]+/).filter(Boolean);
+          const idx = new Map();
+          for (const d of docs) for (const t of ts(d.texto)) idx.set(t, [...(idx.get(t) ?? []), d.id]);
+          return (q) => {
+            const l = ts(q);
+            if (!l.length) return [];
+            return [...new Set(idx.get(l[0]) ?? [])].filter((id) => l.every((t) => (idx.get(t) ?? []).includes(id))).sort((a, b) => a - b);
+          };
+        }
+
+- slug: texto-ou-keyword
+  title: O filtro por gênero que não funciona
+  difficulty: medio
+  kind: quiz
+  in: [search-engines/Elasticsearch]
+  study:
+    - { label: "Tipos text e keyword (Elasticsearch, em inglês)", url: "https://www.elastic.co/docs/reference/elasticsearch/mapping-reference/keyword" }
+  statement: |
+    No Elasticsearch, o campo `genero` foi mapeado como `text`. A busca livre funciona, mas o filtro exato por `Thrash Metal` e a contagem de bandas por gênero dão resultados estranhos, como contar `thrash` e `metal` separados.
+
+    O que explica?
+  options:
+    - text: Campos text passam por análise e viram termos separados, ótimos para busca livre. Filtros exatos, ordenação e agregações pedem keyword, que guarda o valor inteiro
+      why: Certo. É comum mapear o mesmo campo dos dois jeitos, com multi-fields.
+    - text: O Elasticsearch não sabe contar
+      why: As agregações funcionam bem, sobre o tipo de campo certo.
+    - text: Faltou um índice no banco relacional
+      why: A busca e as agregações acontecem no Elasticsearch, com o mapeamento dele.
+    - text: Basta escrever o filtro em maiúsculas
+      why: O problema é a análise do campo, não a forma de escrever.
+  answer: 0
+  explanation: |
+    O Elasticsearch é um motor de busca distribuído construído sobre o Lucene. O mapeamento define como cada campo é analisado e indexado. Errar o mapeamento é a causa mais comum de buscas e agregações estranhas, e mudar o tipo de um campo exige reindexar.
+
+- slug: busca-nao-e-fonte-da-verdade
+  title: O índice de busca desatualizado
+  difficulty: medio
+  kind: quiz
+  in: [search-engines/Elasticsearch, search-engines/Solr, architectural-patterns/Microservices]
+  study:
+    - { label: "Solr: visão geral (em inglês)", url: "https://solr.apache.org/guide/solr/latest/getting-started/introduction.html" }
+  statement: |
+    O catálogo de merch fica no PostgreSQL, e a busca do site usa Solr. Um produto esgotado continua aparecendo como disponível na busca por alguns minutos.
+
+    Qual é a arquitetura mais saudável?
+  options:
+    - text: O PostgreSQL continua sendo a fonte da verdade. O Solr é um índice derivado, atualizado a cada mudança por eventos ou por uma fila, e o estoque é conferido no banco na hora da compra
+      why: Certo. Motores de busca são ótimos para encontrar, mas atualizam com atraso e não têm transações como o banco.
+    - text: Guardar tudo só no Solr e apagar o banco
+      why: Motores de busca não oferecem as garantias transacionais que vendas precisam.
+    - text: Reindexar tudo a cada pedido de busca
+      why: Isso torna a busca lenta e cara.
+    - text: Desistir da busca e usar LIKE no banco
+      why: LIKE não oferece relevância, tolerância a erros nem bom desempenho em textos grandes.
+  answer: 0
+  explanation: |
+    Solr e Elasticsearch usam o Lucene por baixo e oferecem busca com relevância, sinônimos e facetas. Eles costumam receber cópias dos dados do banco principal. O atraso entre os dois é normal, e o sistema precisa ser desenhado para tolerá-lo.

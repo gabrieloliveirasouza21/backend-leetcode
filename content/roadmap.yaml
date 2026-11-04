@@ -1,0 +1,380 @@
+# Hierarquia da trilha. Seções, tópicos e subtópicos seguem https://roadmap.sh/backend.
+# Exceções, que são desta trilha: os subtópicos de consulta em Relational Databases, os agrupadores de NoSQL
+# e os subtópicos Docker e Kubernetes, que no roadmap são links para outros roadmaps.
+# Um problema pode aparecer em mais de um subtópico. A primeira aparição define a ordem.
+title: Backend
+sections:
+  - id: fundamentos
+    title: Fundamentos
+    summary: A base da web, uma linguagem de servidor, bancos relacionais e APIs.
+    topics:
+      - id: introducao
+        title: Introduction
+        summary: O caminho de um pedido até o seu servidor e de volta.
+        study:
+          - label: Como a web funciona (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Learn_web_development/Getting_started/Web_standards/How_the_web_works
+          - label: Visão geral do HTTP (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Guides/Overview
+        subtopics:
+          - { name: How does the internet work?, problems: [] }
+          - { name: What is HTTP?, problems: [] }
+          - { name: What is Domain Name?, problems: [] }
+          - { name: What is hosting?, problems: [] }
+          - { name: DNS and how it works?, problems: [] }
+          - { name: Browsers and how they work?, problems: [] }
+      - id: frontend-basics
+        title: Frontend Basics
+        summary: O suficiente do lado do cliente para entender quem consome a sua API.
+        study:
+          - label: Aprenda desenvolvimento web (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Learn_web_development
+        subtopics:
+          - { name: HTML, problems: [] }
+          - { name: CSS, problems: [] }
+          - { name: JavaScript, problems: [] }
+      - id: backend-language
+        title: Pick a Backend Language
+        summary: Escolha uma linguagem e conheça o modelo de execução dela. Os exercícios práticos usam JavaScript, que roda aqui no navegador.
+        study:
+          - label: Introdução ao Node.js
+            url: https://nodejs.org/pt/learn/getting-started/introduction-to-nodejs
+        subtopics:
+          - { name: JavaScript, problems: [] }
+          - { name: Go, problems: [] }
+          - { name: Python, problems: [] }
+          - { name: Ruby, problems: [] }
+          - { name: Java, problems: [] }
+          - { name: C#, problems: [] }
+          - { name: PHP, problems: [] }
+          - { name: Rust, problems: [] }
+      - id: version-control
+        title: Version Control Systems
+        summary: Histórico do código, branches e trabalho em equipe sem sobrescrever o colega.
+        study:
+          - label: Livro Pro Git em português
+            url: https://git-scm.com/book/pt-br/v2
+        subtopics:
+          - { name: Git, problems: [] }
+      - id: repo-hosting
+        title: Repo Hosting Services
+        summary: Onde o código mora, é revisado e passa pela CI.
+        study:
+          - label: Documentação do GitHub
+            url: https://docs.github.com/pt
+        subtopics:
+          - { name: GitHub, problems: [] }
+          - { name: GitLab, problems: [] }
+      - id: relational-databases
+        title: Relational Databases
+        summary: Tabelas, chaves e SQL. Os exercícios rodam num SQLite de verdade, aqui no navegador.
+        study:
+          - label: SELECT na documentação do SQLite
+            url: https://www.sqlite.org/lang_select.html
+          - label: Tutorial do PostgreSQL
+            url: https://www.postgresql.org/docs/current/tutorial.html
+        subtopics:
+          - { group: Na prática, name: Consultas, problems: [] }
+          - { group: Na prática, name: Joins e agregações, problems: [] }
+          - { group: Na prática, name: Modelagem e restrições, problems: [] }
+          - { name: PostgreSQL, problems: [] }
+          - { name: MySQL, problems: [] }
+          - { name: MariaDB, problems: [] }
+          - { name: SQLite, problems: [] }
+          - { name: MS SQL, problems: [] }
+          - { name: Oracle, problems: [] }
+          - { name: Migrations, problems: [] }
+          - { name: N+1 Problem, problems: [] }
+      - id: apis
+        title: Learn about APIs
+        summary: Contratos entre sistemas. Aqui você escreve rotas, validação e autenticação de uma API.
+        study:
+          - label: Métodos e status HTTP (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Reference/Methods
+          - label: Especificação OpenAPI
+            url: https://swagger.io/specification/
+        subtopics:
+          - { name: REST, problems: [] }
+          - { name: JSON APIs, problems: [] }
+          - { name: SOAP, problems: [] }
+          - { name: gRPC, problems: [] }
+          - { name: GraphQL, problems: [] }
+          - { name: Open API Specs, problems: [] }
+          - { group: Authentication, name: Authentication, problems: [] }
+          - { group: Authentication, name: JWT, problems: [] }
+          - { group: Authentication, name: OAuth, problems: [] }
+          - { group: Authentication, name: Basic Authentication, problems: [] }
+          - { group: Authentication, name: Token Authentication, problems: [] }
+          - { group: Authentication, name: Cookie Based Auth, problems: [] }
+          - { group: Authentication, name: OpenID, problems: [] }
+          - { group: Authentication, name: SAML, problems: [] }
+      - id: caching
+        title: Caching
+        summary: Guardar o que é caro de calcular, e saber quando jogar fora.
+        study:
+          - label: Cache HTTP (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Guides/Caching
+          - label: Documentação do Redis
+            url: https://redis.io/docs/latest/
+        subtopics:
+          - { group: Server Side, name: Redis, problems: [] }
+          - { group: Server Side, name: Memcached, problems: [] }
+          - { name: HTTP Caching, problems: [] }
+      - id: web-servers
+        title: Learn about Web Servers
+        summary: Quem recebe a conexão antes da sua aplicação, termina o TLS e distribui a carga.
+        study:
+          - label: Guia para iniciantes do Nginx
+            url: https://nginx.org/en/docs/beginners_guide.html
+        subtopics:
+          - { name: Nginx, problems: [] }
+          - { name: Apache, problems: [] }
+          - { name: Caddy, problems: [] }
+          - { name: MS IIS, problems: [] }
+      - id: web-security
+        title: Web Security
+        summary: Senhas, transporte, cabeçalhos e os ataques mais comuns contra APIs.
+        study:
+          - label: OWASP Top 10
+            url: https://owasp.org/www-project-top-ten/
+          - label: Guia de armazenamento de senhas (OWASP)
+            url: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+        subtopics:
+          - { group: Hashing Algorithms, name: MD5, problems: [] }
+          - { group: Hashing Algorithms, name: SHA, problems: [] }
+          - { group: Hashing Algorithms, name: scrypt, problems: [] }
+          - { group: Hashing Algorithms, name: bcrypt, problems: [] }
+          - { name: HTTPS, problems: [] }
+          - { name: SSL/TLS, problems: [] }
+          - { name: OWASP Risks, problems: [] }
+          - { name: CORS, problems: [] }
+          - { name: CSP, problems: [] }
+          - { name: Server Security, problems: [] }
+      - id: testing
+        title: Testing
+        summary: Testes que pegam defeitos de verdade. Aqui você escreve testes e o corretor tenta enganá-los.
+        study:
+          - label: Guia do Vitest
+            url: https://vitest.dev/guide/
+          - label: A pirâmide de testes (Martin Fowler, em inglês)
+            url: https://martinfowler.com/articles/practical-test-pyramid.html
+        subtopics:
+          - { name: Unit Testing, problems: [] }
+          - { name: Integration Testing, problems: [] }
+          - { name: Functional Testing, problems: [] }
+      - id: ci-cd
+        title: CI / CD
+        summary: Cada mudança testada automaticamente e publicada com segurança.
+        study:
+          - label: Início rápido do GitHub Actions
+            url: https://docs.github.com/pt/actions/get-started/quickstart
+  - id: ia
+    title: IA no desenvolvimento
+    summary: Usar assistentes de código com critério e construir funcionalidades com modelos de linguagem.
+    topics:
+      - id: ai-basics
+        title: Learn the Basics
+        summary: Como um modelo funciona, o que são embeddings e como buscar contexto para ele.
+        study:
+          - label: Visão geral dos modelos Claude
+            url: https://docs.claude.com/en/docs/about-claude/models/overview
+          - label: Embeddings (Anthropic)
+            url: https://docs.claude.com/en/docs/build-with-claude/embeddings
+        subtopics:
+          - { name: How LLMs work, problems: [] }
+          - { name: AI vs Traditional Coding, problems: [] }
+          - { name: Embeddings, problems: [] }
+          - { name: Vectors, problems: [] }
+          - { name: RAGs, problems: [] }
+      - id: ai-applications
+        title: Applications
+        summary: Onde a IA ajuda no dia a dia do código.
+        study:
+          - label: Guias de casos de uso (Anthropic)
+            url: https://docs.claude.com/en/docs/about-claude/use-case-guides/overview
+        subtopics:
+          - { name: Code Reviews, problems: [] }
+          - { name: Refactoring, problems: [] }
+          - { name: Documentation Generation, problems: [] }
+      - id: ai-assisted
+        title: AI Assisted Coding
+        summary: Assistentes e agentes de código, prompts e as integrações que dão contexto a eles.
+        study:
+          - label: Documentação do Claude Code
+            url: https://docs.claude.com/en/docs/claude-code/overview
+          - label: Guia de engenharia de prompt (Anthropic)
+            url: https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/overview
+        subtopics:
+          - { name: Claude Code, problems: [] }
+          - { name: Cursor, problems: [] }
+          - { name: Copilot, problems: [] }
+          - { name: Antigravity, problems: [] }
+          - { name: Prompting Techniques, problems: [] }
+          - { name: Agents, problems: [] }
+          - { name: MCP, problems: [] }
+          - { name: Skills, problems: [] }
+      - id: ai-integration
+        title: Integration Patterns
+        summary: Chamar modelos a partir do seu backend, com streaming, saída estruturada e ferramentas.
+        study:
+          - label: API Messages da Anthropic
+            url: https://docs.claude.com/en/api/messages
+          - label: Uso de ferramentas (Anthropic)
+            url: https://docs.claude.com/en/docs/agents-and-tools/tool-use/overview
+        subtopics:
+          - { name: Streaming, problems: [] }
+          - { name: Structured Outputs, problems: [] }
+          - { name: Function Calling, problems: [] }
+          - { group: AI Providers, name: Anthropic, problems: [] }
+          - { group: AI Providers, name: OpenAI, problems: [] }
+          - { group: AI Providers, name: Gemini, problems: [] }
+  - id: avancado
+    title: Backend avançado
+    summary: O que muda quando o sistema cresce, falha e precisa continuar respondendo.
+    topics:
+      - id: more-databases
+        title: More about Databases
+        summary: Transações, normalização, ORMs e como o banco se comporta sob carga e falha.
+        study:
+          - label: Transações no SQLite
+            url: https://www.sqlite.org/lang_transaction.html
+          - label: Isolamento de transações (PostgreSQL)
+            url: https://www.postgresql.org/docs/current/transaction-iso.html
+        subtopics:
+          - { name: Transactions, problems: [] }
+          - { name: ACID, problems: [] }
+          - { name: ORMs, problems: [] }
+          - { name: Normalization, problems: [] }
+          - { name: Failure Modes, problems: [] }
+          - { name: Profiling Performance, problems: [] }
+      - id: scaling-databases
+        title: Scaling Databases
+        summary: Índices, réplicas e shards, e o que se perde em cada escolha.
+        study:
+          - label: Como o planejador do SQLite usa índices
+            url: https://www.sqlite.org/queryplanner.html
+          - label: Use The Index, Luke (em inglês)
+            url: https://use-the-index-luke.com/
+        subtopics:
+          - { name: Database Indexes, problems: [] }
+          - { name: Data Replication, problems: [] }
+          - { name: Sharding Strategies, problems: [] }
+          - { name: CAP Theorem, problems: [] }
+      - id: nosql
+        title: NoSQL Databases
+        summary: Modelos de dados além das tabelas, cada um bom para um tipo de acesso.
+        study:
+          - label: Bancos NoSQL (MongoDB)
+            url: https://www.mongodb.com/resources/basics/databases/nosql-explained
+        subtopics:
+          - { group: Documento, name: MongoDB, problems: [] }
+          - { group: Documento, name: CouchDB, problems: [] }
+          - { group: Chave-valor, name: Redis, problems: [] }
+          - { group: Chave-valor, name: DynamoDB, problems: [] }
+          - { group: Tempo real, name: Firebase, problems: [] }
+          - { group: Tempo real, name: RethinkDB, problems: [] }
+          - { group: Colunar, name: Cassandra, problems: [] }
+          - { group: Colunar, name: ScyllaDB, problems: [] }
+          - { group: Colunar, name: ClickHouse, problems: [] }
+          - { group: Séries temporais, name: Influx DB, problems: [] }
+          - { group: Séries temporais, name: TimescaleDB, problems: [] }
+          - { group: Grafo, name: Neo4j, problems: [] }
+          - { group: Grafo, name: AWS Neptune, problems: [] }
+          - { group: Grafo, name: DGraph, problems: [] }
+      - id: architectural-patterns
+        title: Architectural Patterns
+        summary: Como dividir um sistema, e o custo de cada divisão.
+        study:
+          - label: The Twelve-Factor App
+            url: https://12factor.net/pt_br/
+          - label: Microsserviços (Martin Fowler, em inglês)
+            url: https://martinfowler.com/articles/microservices.html
+        subtopics:
+          - { name: Monolith, problems: [] }
+          - { name: Microservices, problems: [] }
+          - { name: SOA, problems: [] }
+          - { name: Serverless, problems: [] }
+          - { name: Service Mesh, problems: [] }
+          - { name: Twelve Factor Apps, problems: [] }
+      - id: message-brokers
+        title: Message Brokers
+        summary: Filas e tópicos para desacoplar serviços e absorver picos.
+        study:
+          - label: Tutoriais do RabbitMQ
+            url: https://www.rabbitmq.com/tutorials
+          - label: Introdução ao Kafka
+            url: https://kafka.apache.org/intro
+        subtopics:
+          - { name: RabbitMQ, problems: [] }
+          - { name: Kafka, problems: [] }
+      - id: containerization
+        title: Containerization vs. Virtualization
+        summary: Empacotar a aplicação com o ambiente dela e rodar em qualquer lugar.
+        study:
+          - label: Visão geral do Docker
+            url: https://docs.docker.com/get-started/docker-overview/
+          - label: Conceitos do Kubernetes
+            url: https://kubernetes.io/pt-br/docs/concepts/overview/
+        subtopics:
+          - { group: Containerization, name: Docker, problems: [] }
+          - { group: Containerization, name: LXC, problems: [] }
+          - { group: Container Orchestration, name: Kubernetes, problems: [] }
+      - id: search-engines
+        title: Search Engines
+        summary: Busca por texto livre, relevância e índices invertidos.
+        study:
+          - label: Guia do Elasticsearch
+            url: https://www.elastic.co/docs/get-started
+        subtopics:
+          - { name: Elasticsearch, problems: [] }
+          - { name: Solr, problems: [] }
+      - id: real-time
+        title: Real-Time Data
+        summary: Mandar dados ao cliente assim que eles mudam.
+        study:
+          - label: Server-sent events (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Web/API/Server-sent_events/Using_server-sent_events
+          - label: WebSockets (MDN)
+            url: https://developer.mozilla.org/pt-BR/docs/Web/API/WebSockets_API
+        subtopics:
+          - { name: Server Sent Events, problems: [] }
+          - { name: WebSockets, problems: [] }
+          - { name: Long / Short Polling, problems: [] }
+      - id: building-for-scale
+        title: Building For Scale
+        summary: Limitar, recusar com elegância e enxergar o que acontece em produção.
+        study:
+          - label: Padrão Circuit Breaker (Microsoft, em inglês)
+            url: https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker
+          - label: Documentação do OpenTelemetry
+            url: https://opentelemetry.io/docs/
+        subtopics:
+          - { name: Graceful Degradation, problems: [] }
+          - { name: Throttling, problems: [] }
+          - { name: Backpressure, problems: [] }
+          - { name: Loadshifting, problems: [] }
+          - { name: Circuit Breaker, problems: [] }
+          - { group: Observability, name: Instrumentation, problems: [] }
+          - { group: Observability, name: Monitoring, problems: [] }
+          - { group: Observability, name: Telemetry, problems: [] }
+
+practice:
+  - id: conserte
+    title: Conserte
+    summary: O código já existe e tem um defeito. Descubra a causa a partir do sintoma e corrija.
+    study:
+      - label: Depurando em Node.js
+        url: https://nodejs.org/en/learn/getting-started/debugging
+    subtopics:
+      - { name: Lógica, problems: [] }
+      - { name: Banco de dados, problems: [] }
+      - { name: APIs, problems: [] }
+  - id: implemente
+    title: Implemente
+    summary: A base está pronta. Acrescente o que a tarefa pede sem quebrar o que já funciona.
+    study:
+      - label: Documentação do Node.js
+        url: https://nodejs.org/docs/latest/api/
+    subtopics:
+      - { name: Funcionalidades, problems: [] }
+      - { name: Banco de dados, problems: [] }
