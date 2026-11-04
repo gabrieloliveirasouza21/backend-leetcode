@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { practice, problems, sections, topicProblemSlugs } from '../src/content';
+import { practice, problems, projectsByTopic, sections, topicProblemSlugs, topics } from '../src/content';
 import { checkRules } from '../src/judge/rules';
 
 const KINDS = ['quiz', 'js', 'ts', 'sql', 'tests'];
@@ -71,6 +71,23 @@ describe('conteúdo', () => {
     if (problem.kind === 'ts') expect(problem.types?.trim()).toBeTruthy();
     // A solução respeita as regras do próprio problema.
     expect(checkRules(problem, problem.solution!)).toBeNull();
+  });
+});
+
+describe('projetos', () => {
+  it('cada tópico com projetos existe e tem ao menos 5 ideias completas', () => {
+    const ids = new Set([...topics, ...practice].map((t) => t.id));
+    const problemas: string[] = [];
+    for (const [topic, list] of projectsByTopic) {
+      if (!ids.has(topic)) problemas.push(`tópico desconhecido: ${topic}`);
+      if (list.length < 5) problemas.push(`${topic}: só ${list.length} projetos`);
+      for (const p of list) {
+        if (typeof p.title !== 'string' || typeof p.description !== 'string') problemas.push(`${topic}: texto inválido em ${p.title}`);
+        if (!['facil', 'medio', 'dificil'].includes(p.level)) problemas.push(`${topic}/${p.title}: nível ${p.level}`);
+        if (!p.skills?.length) problemas.push(`${topic}/${p.title}: sem skills`);
+      }
+    }
+    expect(problemas).toEqual([]);
   });
 });
 

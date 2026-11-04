@@ -290,3 +290,23 @@ th { background: var(--surface-2); font-weight: 600; }
 td.null { color: var(--muted); font-style: italic; }
 .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 12px; }
 .compare h4 { margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+
+/* Progresso por dificuldade */
+.difficulty-progress { display: grid; gap: 8px; margin-top: 18px; max-width: 520px; }
+.difficulty-row { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+.difficulty-row.facil { --tone: var(--good); }
+.difficulty-row.medio { --tone: var(--warn); }
+.difficulty-row.dificil { --tone: var(--bad); }
+.difficulty-name { color: var(--tone); font-weight: 600; }
+.difficulty-bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.difficulty-bar span { display: block; height: 100%; background: var(--tone); border-radius: 4px; transition: width 0.4s; }
+.difficulty-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Ideias de projetos */
+.projects { margin: 0 0 14px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.projects summary { cursor: pointer; font-weight: 600; }
+.project-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.project { padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.project-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.project p { margin: 6px 0 0; font-size: 14px; }
+.project-skills { color: var(--muted); font-size: 13px; }

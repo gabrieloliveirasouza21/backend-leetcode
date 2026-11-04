@@ -1,4 +1,5 @@
 import { parse } from 'yaml';
+import projectsRaw from '../content/projects.yaml?raw';
 import roadmapRaw from '../content/roadmap.yaml?raw';
 import type { JudgedProblem } from './judge/types';
 
@@ -134,3 +135,17 @@ export const KIND_LABEL: Record<string, string> = {
   sql: 'SQL',
   tests: 'Testes',
 };
+
+/** Uma ideia de projeto prático para fazer fora da plataforma. */
+export interface Project {
+  title: string;
+  level: Difficulty;
+  description: string;
+  /** O que o projeto faz praticar. */
+  skills: string[];
+}
+
+/** Ideias de projetos por id de tópico. Só os tópicos em que projetos fazem sentido aparecem. */
+export const projectsByTopic: Map<string, Project[]> = new Map(
+  (parse(projectsRaw) as { topic: string; projects: Project[] }[]).map((entry) => [entry.topic, entry.projects]),
+);

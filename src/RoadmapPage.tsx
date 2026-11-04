@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
-import { KIND_LABEL, practice, problems, sections, topicProblemSlugs, topics, type Difficulty, type Problem, type Topic } from './content';
+import { KIND_LABEL, practice, problems, projectsByTopic, sections, topicProblemSlugs, topics, type Difficulty, type Problem, type Topic } from './content';
+import { inline } from './text';
 
 export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   facil: 'Fácil',
@@ -28,6 +29,58 @@ function ProblemList({ slugs, solved, visible }: { slugs: string[]; solved: Set<
   );
 }
 
+/** Progresso geral em cada dificuldade, como barras. */
+function DifficultyProgress({ solved }: { solved: Set<string> }) {
+  return (
+    <div className="difficulty-progress" aria-label="Progresso por dificuldade">
+      {(Object.keys(DIFFICULTY_LABEL) as Difficulty[]).map((difficulty) => {
+        const all = problems.filter((p) => p.difficulty === difficulty);
+        const done = all.filter((p) => solved.has(p.slug)).length;
+        const percent = all.length ? Math.round((done / all.length) * 100) : 0;
+        return (
+          <div key={difficulty} className={`difficulty-row ${difficulty}`}>
+            <span className="difficulty-name">{DIFFICULTY_LABEL[difficulty]}</span>
+            <div
+              className="difficulty-bar"
+              role="progressbar"
+              aria-label={`${DIFFICULTY_LABEL[difficulty]}: ${done} de ${all.length}`}
+              aria-valuemin={0}
+              aria-valuemax={all.length}
+              aria-valuenow={done}
+            >
+              <span style={{ width: `${percent}%` }} />
+            </div>
+            <span className="difficulty-count">{done}/{all.length}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProjectIdeas({ topicId }: { topicId: string }) {
+  const projects = projectsByTopic.get(topicId);
+  if (!projects) return null;
+  return (
+    <details className="projects">
+      <summary>Ideias de projetos práticos ({projects.length})</summary>
+      <p className="muted">Para fazer fora da plataforma, no seu repositório, e colocar no portfólio.</p>
+      <ul className="project-list">
+        {projects.map((project) => (
+          <li key={project.title} className="project">
+            <div className="project-head">
+              <strong>{project.title}</strong>
+              <span className={`badge ${project.level}`}>{DIFFICULTY_LABEL[project.level]}</span>
+            </div>
+            <p>{inline(project.description)}</p>
+            <p className="project-skills">{project.skills.join(' · ')}</p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 type Filter = 'todas' | Difficulty | 'pratica';
 
 export function RoadmapPage({ solved }: { solved: Set<string> }) {
@@ -51,6 +104,7 @@ export function RoadmapPage({ solved }: { solved: Set<string> }) {
             <span className="node-count">{done}/{slugs.length}</span>
           </summary>
           <p className="node-summary">{topic.summary}</p>
+          <ProjectIdeas topicId={topic.id} />
           {!matching && <p className="empty">Nenhum problema com esse filtro.</p>}
           {topic.problems && <ProblemList slugs={topic.problems} solved={solved} visible={visible} />}
           {topic.subtopics.map((subtopic, index) => {
@@ -85,6 +139,7 @@ export function RoadmapPage({ solved }: { solved: Set<string> }) {
           Você está construindo o backend de um festival de metal: API de ingressos, banco de dados, filas e cache. Cada etapa traz
           problemas corrigidos na hora, com testes que você vê e casos de borda que você não vê.
         </p>
+        <DifficultyProgress solved={solved} />
         <div className="filters" role="group" aria-label="Filtrar problemas">
           {FILTERS.map((option) => (
             <button

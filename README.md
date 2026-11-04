@@ -69,6 +69,12 @@ Crie um arquivo em `content/problems/`, com um problema ou uma lista deles. O ca
 | `visual` | Opcional. Visualização interativa mostrada depois do enunciado, pelo id em `src/visuals/index.tsx` |
 | `study` | Obrigatório. Lista de `label` e `url` com fontes para estudar este exercício, mostradas antes das fontes do tópico |
 
+## Projetos práticos e progresso
+
+Os tópicos em que faz sentido construir algo têm pelo menos 5 ideias de projetos práticos, para fazer fora da plataforma e colocar no portfólio. Elas ficam em `content/projects.yaml`, por id de tópico, com `title`, `level`, `description` e `skills`. Um teste confere que cada tópico citado existe e tem ao menos 5 ideias.
+
+O topo da trilha mostra uma barra de progresso para cada dificuldade: quantos problemas fáceis, médios e difíceis já foram resolvidos.
+
 ## Revisão espaçada
 
 A tela Revisar (`#/revisao`) mostra os problemas que venceram e as próximas revisões, e o topo do site mostra quantos estão pendentes. A lógica fica em `src/review.ts`:

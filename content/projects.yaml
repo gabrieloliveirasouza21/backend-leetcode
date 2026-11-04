@@ -1,0 +1,467 @@
+# Ideias de projetos práticos por tópico da trilha. Cada tópico listado tem pelo menos 5.
+# Tópicos de conceito puro, como Frontend Basics e Git, ficam de fora.
+# level: facil, medio ou dificil. skills: o que o projeto faz praticar.
+
+- topic: introducao
+  projects:
+    - title: 'Servidor HTTP do zero'
+      level: medio
+      description: 'Com o módulo `net` do Node.js, sem framework, leia o texto do pedido, separe método, caminho e cabeçalhos, e responda com status e corpo. Sirva duas rotas e um 404.'
+      skills: [HTTP, TCP, cabeçalhos]
+    - title: 'Mini curl'
+      level: facil
+      description: 'Um programa de linha de comando que faz um pedido HTTP e mostra o status, os cabeçalhos, o tempo de resposta e os redirecionamentos seguidos.'
+      skills: [HTTP, redirecionamentos, status]
+    - title: 'Inspetor de DNS'
+      level: medio
+      description: 'Dado um domínio, consulte os registros A, AAAA, CNAME, MX e TXT, mostre o TTL de cada um e compare as respostas de dois servidores DNS diferentes.'
+      skills: [DNS, TTL, registros]
+    - title: 'Página do festival no ar'
+      level: facil
+      description: 'Publique uma página estática com domínio próprio, HTTPS e um subdomínio para a API. Documente cada registro DNS que você criou e por quê.'
+      skills: [hospedagem, domínio, HTTPS]
+    - title: 'Medidor de latência'
+      level: medio
+      description: 'Meça, para uma lista de sites, o tempo de DNS, da conexão TCP, do TLS e do primeiro byte, e mostre num gráfico onde o tempo é gasto.'
+      skills: [rede, TLS, desempenho]
+
+- topic: backend-language
+  projects:
+    - title: 'CLI de line-up'
+      level: facil
+      description: 'Um programa de linha de comando que lê um CSV de shows e responde perguntas como "quem toca sábado" e "quais bandas tocam mais de uma vez", com testes.'
+      skills: [arquivos, estruturas de dados, testes]
+    - title: 'API de ingressos sem framework'
+      level: medio
+      description: 'Na linguagem que você escolheu, com só a biblioteca padrão, crie rotas para listar, criar e cancelar ingressos, com validação e respostas em JSON.'
+      skills: [HTTP, JSON, validação]
+    - title: 'Mesma API, duas linguagens'
+      level: dificil
+      description: 'Reescreva a API de ingressos em outra linguagem, como Go ou Python, e compare o código, o consumo de memória e as requisições por segundo com uma ferramenta de carga.'
+      skills: [comparação de linguagens, benchmark, concorrência]
+    - title: 'Worker que processa arquivos em paralelo'
+      level: medio
+      description: 'Leia uma pasta com milhares de fotos do público e gere miniaturas usando goroutines, threads ou workers, com um limite de tarefas simultâneas.'
+      skills: [concorrência, limites, arquivos]
+    - title: 'Biblioteca publicada'
+      level: medio
+      description: 'Extraia uma função útil, como a validação de CPF ou de horários de show, para um pacote com testes, documentação e versão semântica, e publique no registro da linguagem.'
+      skills: [pacotes, versionamento, documentação]
+
+- topic: relational-databases
+  projects:
+    - title: 'Banco do festival modelado do zero'
+      level: medio
+      description: 'Modele bandas, palcos, shows, ingressos e compradores no PostgreSQL, com chaves estrangeiras, restrições `CHECK` e `UNIQUE`, e um script que gera dados de exemplo.'
+      skills: [modelagem, restrições, PostgreSQL]
+    - title: 'Relatórios em SQL'
+      level: medio
+      description: 'Escreva dez relatórios para a produção, como faturamento por dia, ocupação por setor e ranking de bandas, usando joins, agregações e funções de janela.'
+      skills: [joins, agregações, funções de janela]
+    - title: 'Migrações versionadas'
+      level: medio
+      description: 'Use uma ferramenta de migração, como Flyway, Prisma Migrate ou Alembic, e evolua o esquema em cinco passos, inclusive renomear uma coluna sem derrubar a aplicação.'
+      skills: [migrações, expandir e contrair, deploy]
+    - title: 'Caçador de N+1'
+      level: dificil
+      description: 'Monte uma página que lista shows com banda e local, meça quantas consultas ela faz por pedido, e reduza para uma ou duas com joins ou carregamento em lote.'
+      skills: [N+1, ORM, desempenho]
+    - title: 'Importador de planilha'
+      level: facil
+      description: 'Importe um CSV de vendas com linhas inválidas para o banco, guardando as rejeitadas num relatório, tudo numa transação que pode ser repetida sem duplicar dados.'
+      skills: [transações, validação, idempotência]
+
+- topic: apis
+  projects:
+    - title: 'API REST de ingressos completa'
+      level: medio
+      description: 'Rotas de shows e ingressos com paginação por cursor, filtros, status corretos, erros em formato padrão e contrato OpenAPI que gera a documentação.'
+      skills: [REST, OpenAPI, paginação]
+    - title: 'Login com JWT e refresh token'
+      level: dificil
+      description: 'Cadastro, login com senha em bcrypt, access token curto, refresh token rotativo guardado no banco, e logout que invalida a sessão.'
+      skills: [JWT, bcrypt, sessões]
+    - title: 'Login com o Google ou o GitHub'
+      level: medio
+      description: 'Implemente o fluxo Authorization Code com PKCE do OpenID Connect, conferindo emissor, audiência, expiração e nonce do ID Token.'
+      skills: [OAuth, OpenID Connect, PKCE]
+    - title: 'API GraphQL do line-up'
+      level: dificil
+      description: 'Exponha bandas, shows e músicos em GraphQL, resolva o N+1 com DataLoader e limite a profundidade das consultas.'
+      skills: [GraphQL, DataLoader, limites]
+    - title: 'Serviço gRPC de disponibilidade'
+      level: dificil
+      description: 'Defina um arquivo `.proto` com uma chamada simples e um stream de lotação em tempo real, gere cliente e servidor, e use deadlines em todas as chamadas.'
+      skills: [gRPC, Protocol Buffers, streaming]
+    - title: 'Receptor de webhooks'
+      level: medio
+      description: 'Receba webhooks de um gateway de pagamento de teste, confira a assinatura HMAC, trate entregas repetidas pela chave de idempotência e responda rápido, deixando o trabalho para uma fila.'
+      skills: [webhooks, HMAC, idempotência]
+
+- topic: caching
+  projects:
+    - title: 'Cache-aside com Redis'
+      level: medio
+      description: 'Ponha o Redis na frente da rota de detalhes do show, com TTL, invalidação ao editar e métricas de acertos e falhas de cache.'
+      skills: [Redis, TTL, invalidação]
+    - title: 'Cabeçalhos de cache certos'
+      level: facil
+      description: 'Sirva o catálogo com `ETag` e `Cache-Control`, responda `304 Not Modified` quando o cliente já tem a versão atual, e meça a economia de banda.'
+      skills: [HTTP caching, ETag, 304]
+    - title: 'Proteção contra estouro de cache'
+      level: dificil
+      description: 'Simule mil pedidos chegando ao mesmo tempo quando uma chave popular expira, e resolva com uma trava ou com renovação antecipada, para só um pedido ir ao banco.'
+      skills: [cache stampede, travas, concorrência]
+    - title: 'Cache LRU com limite de memória'
+      level: medio
+      description: 'Escreva um cache em memória com limite de itens e de bytes, despejo do item menos usado e estatísticas, e compare com o Memcached.'
+      skills: [LRU, estruturas de dados, Memcached]
+    - title: 'Placar ao vivo com sorted set'
+      level: facil
+      description: 'Uma votação do público em que cada voto faz `ZINCRBY`, e uma rota devolve o top 10 em tempo real.'
+      skills: [Redis, sorted sets, atomicidade]
+
+- topic: web-servers
+  projects:
+    - title: 'Nginx na frente da API'
+      level: medio
+      description: 'Configure o Nginx como proxy reverso para duas cópias da API, com balanceamento, HTTPS, compressão e arquivos estáticos servidos direto pelo Nginx.'
+      skills: [Nginx, proxy reverso, balanceamento]
+    - title: 'HTTPS automático com Caddy'
+      level: facil
+      description: 'Suba um site com o Caddy, com certificado obtido e renovado sozinho, redirecionamento de HTTP para HTTPS e cabeçalhos de segurança.'
+      skills: [Caddy, TLS, ACME]
+    - title: 'Página de manutenção sem derrubar nada'
+      level: medio
+      description: 'Configure o proxy para mostrar uma página de manutenção em rotas escolhidas, enquanto a API continua respondendo nas outras.'
+      skills: [roteamento, location, operação]
+    - title: 'Limite de taxa no proxy'
+      level: medio
+      description: 'Use o `limit_req` do Nginx para limitar pedidos por IP na rota de login, e teste com uma ferramenta de carga para ver os 429.'
+      skills: [rate limiting, Nginx, testes de carga]
+    - title: 'Comparativo de servidores'
+      level: dificil
+      description: 'Sirva os mesmos arquivos estáticos com Nginx, Apache e Caddy, meça latência e consumo de memória com carga, e escreva o que explica as diferenças.'
+      skills: [benchmark, Apache, Caddy]
+
+- topic: web-security
+  projects:
+    - title: 'Cadastro com senhas bem guardadas'
+      level: medio
+      description: 'Guarde senhas com Argon2id ou bcrypt, aumente o custo com o tempo refazendo o hash no login, e bloqueie tentativas repetidas por conta e por IP.'
+      skills: [hash de senha, bcrypt, força bruta]
+    - title: 'Auditoria OWASP da sua API'
+      level: dificil
+      description: 'Passe pela lista OWASP API Top 10 contra uma API sua, tente explorar cada item, corrija o que achar e escreva um relatório curto.'
+      skills: [OWASP, injeção, autorização]
+    - title: 'Cabeçalhos de segurança nota A'
+      level: facil
+      description: 'Configure HSTS, CSP, `X-Content-Type-Options` e CORS restrito no seu site, e confira com um analisador de cabeçalhos até chegar à nota máxima.'
+      skills: [CSP, HSTS, CORS]
+    - title: 'Laboratório de injeção de SQL'
+      level: medio
+      description: 'Monte uma rota vulnerável de propósito, explore-a localmente, e depois corrija com consultas parametrizadas e um teste que prova a correção.'
+      skills: [SQL injection, parâmetros, testes]
+    - title: 'Servidor endurecido'
+      level: dificil
+      description: 'Numa máquina virtual nova, configure SSH só com chave, firewall, atualizações automáticas, usuário sem root para a aplicação e alertas de login.'
+      skills: [Linux, SSH, firewall]
+
+- topic: testing
+  projects:
+    - title: 'Suíte da API de ingressos'
+      level: medio
+      description: 'Testes unitários para as regras de preço e desconto, de integração contra um banco real em container, e um teste de ponta a ponta da compra.'
+      skills: [testes unitários, integração, ponta a ponta]
+    - title: 'Testes de contrato'
+      level: dificil
+      description: 'Valide em teste que todas as respostas da API seguem o contrato OpenAPI, e quebre o build quando alguém mudar um campo sem atualizar o contrato.'
+      skills: [contrato, OpenAPI, CI]
+    - title: 'Testes de carga'
+      level: medio
+      description: 'Com k6 ou outra ferramenta, simule a abertura das vendas, descubra o ponto em que a latência dispara e registre o gargalo encontrado.'
+      skills: [carga, latência, gargalos]
+    - title: 'Teste de mutação'
+      level: medio
+      description: 'Rode uma ferramenta de mutação, como Stryker, num módulo seu, e escreva os testes que faltam para matar os mutantes sobreviventes.'
+      skills: [mutação, cobertura, qualidade]
+    - title: 'Dados de teste com fábricas'
+      level: facil
+      description: 'Crie fábricas de dados para bandas, shows e ingressos, e reescreva testes que dependiam de um banco compartilhado para que cada um monte o próprio cenário.'
+      skills: [fixtures, isolamento, legibilidade]
+
+- topic: ci-cd
+  projects:
+    - title: 'Pipeline completa no GitHub Actions'
+      level: facil
+      description: 'Lint, testes, build e deploy automático a cada merge na main, com cache de dependências e bloqueio de merge quando algo falha.'
+      skills: [GitHub Actions, CI, deploy]
+    - title: 'Ambiente de pré-visualização por pull request'
+      level: dificil
+      description: 'Cada pull request sobe uma cópia da API com banco próprio e comenta o endereço no PR. O ambiente é destruído quando o PR fecha.'
+      skills: [ambientes efêmeros, infraestrutura, automação]
+    - title: 'Deploy sem indisponibilidade'
+      level: dificil
+      description: 'Faça deploy com blue-green ou rolling update, com checagem de saúde antes de trocar o tráfego e volta automática se a nova versão falhar.'
+      skills: [blue-green, health checks, rollback]
+    - title: 'Migrações na pipeline'
+      level: medio
+      description: 'Rode as migrações do banco na pipeline antes do deploy, com uma etapa que confere se a migração é compatível com a versão que está no ar.'
+      skills: [migrações, CI, compatibilidade]
+    - title: 'Varredura de dependências e segredos'
+      level: facil
+      description: 'Acrescente à pipeline uma varredura de dependências vulneráveis e de segredos commitados por engano, que falha o build e explica como corrigir.'
+      skills: [segurança na CI, dependências, segredos]
+
+- topic: ai-basics
+  projects:
+    - title: 'Busca semântica no regulamento'
+      level: medio
+      description: 'Divida o regulamento do festival em pedaços, gere embeddings, guarde no pgvector e responda buscas por sentido, comparando com uma busca por palavras.'
+      skills: [embeddings, pgvector, busca semântica]
+    - title: 'Assistente com RAG e citações'
+      level: dificil
+      description: 'Um chat que responde dúvidas do público usando só os trechos recuperados, cita a fonte de cada resposta e diz que não sabe quando não encontra.'
+      skills: [RAG, prompts, citações]
+    - title: 'Avaliação da busca'
+      level: dificil
+      description: 'Monte 50 perguntas com o trecho certo de cada uma e meça o recall@5 da sua busca. Teste tamanhos de pedaço e modelos diferentes e registre o que melhorou.'
+      skills: [avaliação, recall, experimentos]
+    - title: 'Recomendação de bandas parecidas'
+      level: medio
+      description: 'Gere embeddings das descrições das bandas e mostre, na página de cada uma, as cinco mais parecidas, com um índice HNSW.'
+      skills: [vetores, vizinhos próximos, índices]
+    - title: 'Classificador de mensagens do suporte'
+      level: facil
+      description: 'Classifique mensagens dos fãs em reembolso, acessibilidade, imprensa e outros, primeiro com regras e depois com um modelo, e compare os acertos.'
+      skills: [classificação, LLM, comparação]
+
+- topic: ai-integration
+  projects:
+    - title: 'Resposta em streaming'
+      level: medio
+      description: 'Uma rota que chama a API de um modelo com streaming e repassa os tokens ao navegador por Server-Sent Events, com cancelamento quando a pessoa fecha a aba.'
+      skills: [streaming, SSE, cancelamento]
+    - title: 'Extração com saída estruturada'
+      level: medio
+      description: 'Leia e-mails de bandas pedindo credenciamento e extraia nome, função e dias num JSON validado por esquema, rejeitando respostas fora do formato.'
+      skills: [saída estruturada, JSON Schema, validação]
+    - title: 'Agente com ferramentas'
+      level: dificil
+      description: 'Um assistente que consulta disponibilidade e reserva ingressos chamando ferramentas da sua API, com confirmação antes de qualquer compra e limite de passos.'
+      skills: [function calling, agentes, segurança]
+    - title: 'Servidor MCP da sua API'
+      level: dificil
+      description: 'Exponha a consulta de shows e de ingressos como um servidor MCP, com permissões só de leitura, e use a partir de um assistente.'
+      skills: [MCP, ferramentas, permissões]
+    - title: 'Painel de custo das chamadas'
+      level: facil
+      description: 'Registre tokens de entrada e de saída, latência e custo de cada chamada ao modelo, e mostre por rota e por dia, com alerta quando passar de um orçamento.'
+      skills: [custos, observabilidade, tokens]
+
+- topic: more-databases
+  projects:
+    - title: 'Venda sem vender duas vezes'
+      level: dificil
+      description: 'Simule cem compras simultâneas do último ingresso e prove, com testes, que só uma passa. Compare `UPDATE` condicional, `SELECT FOR UPDATE` e isolamento serializável.'
+      skills: [transações, isolamento, concorrência]
+    - title: 'Mesma funcionalidade com e sem ORM'
+      level: medio
+      description: 'Implemente o relatório de vendas com o ORM e com SQL escrito à mão, compare o SQL gerado, o tempo e a legibilidade.'
+      skills: [ORM, SQL, desempenho]
+    - title: 'Normalizando uma planilha'
+      level: medio
+      description: 'Pegue uma planilha de vendas com dados repetidos e transforme num esquema na terceira forma normal, com um script de migração dos dados.'
+      skills: [normalização, modelagem, migração]
+    - title: 'Investigação de consulta lenta'
+      level: medio
+      description: 'Ative o registro de consultas lentas, escolha as três piores, leia o `EXPLAIN ANALYZE` de cada uma e documente a correção e o ganho.'
+      skills: [EXPLAIN, profiling, índices]
+    - title: 'Backup que você já testou'
+      level: facil
+      description: 'Agende backups do banco, restaure num servidor separado toda semana e confira automaticamente que os dados voltaram.'
+      skills: [backup, restauração, operação]
+
+- topic: scaling-databases
+  projects:
+    - title: 'Réplica de leitura'
+      level: medio
+      description: 'Suba um PostgreSQL principal e uma réplica, mande as leituras para a réplica, e trate o read-your-writes para quem acabou de alterar um dado.'
+      skills: [replicação, read-your-writes, PostgreSQL]
+    - title: 'Sharding na aplicação'
+      level: dificil
+      description: 'Distribua os check-ins entre três bancos por hash do id do ingresso, com uma camada que roteia consultas e um script para acrescentar um quarto shard.'
+      skills: [sharding, roteamento, rebalanceamento]
+    - title: 'Índices medidos'
+      level: medio
+      description: 'Com um milhão de linhas de ingressos, meça cinco consultas antes e depois de criar índices, inclusive compostos e parciais, e o custo deles nas inserções.'
+      skills: [índices, EXPLAIN, custo de escrita]
+    - title: 'Simulador de partição'
+      level: dificil
+      description: 'Rode três nós de um banco distribuído em containers, corte a rede entre eles e observe o que cada nível de consistência faz com leituras e escritas.'
+      skills: [CAP, consistência, falhas]
+    - title: 'Pool de conexões'
+      level: facil
+      description: 'Meça o que acontece com a API sem pool, com pool pequeno e com pool grande sob carga, e escolha um tamanho justificado pelos números.'
+      skills: [conexões, pool, carga]
+
+- topic: nosql
+  projects:
+    - title: 'Catálogo de merch no MongoDB'
+      level: facil
+      description: 'Modele produtos com variações de tamanho e cor em documentos, crie índices para as buscas comuns e compare com o mesmo modelo em tabelas.'
+      skills: [MongoDB, documentos, índices]
+    - title: 'Tabela única no DynamoDB'
+      level: dificil
+      description: 'Liste os padrões de acesso do sistema de ingressos e desenhe uma tabela única no DynamoDB com chaves e índices secundários que atendam todos.'
+      skills: [DynamoDB, chaves, padrões de acesso]
+    - title: 'Check-ins no Cassandra'
+      level: dificil
+      description: 'Grave milhões de check-ins num cluster local de Cassandra ou ScyllaDB, com tabelas pensadas para cada consulta do painel.'
+      skills: [Cassandra, modelagem por consulta, escrita massiva]
+    - title: 'Métricas de lotação em série temporal'
+      level: medio
+      description: 'Guarde a lotação de cada setor por segundo no InfluxDB ou TimescaleDB, com retenção de 7 dias dos dados brutos e médias de 5 minutos guardadas por um ano.'
+      skills: [séries temporais, retenção, downsampling]
+    - title: 'Grafo de bandas e músicos'
+      level: medio
+      description: 'Carregue bandas, músicos e participações no Neo4j e responda "quais bandas estão a dois passos desta" e "quem tocou com mais gente".'
+      skills: [Neo4j, Cypher, grafos]
+
+- topic: architectural-patterns
+  projects:
+    - title: 'Monolito modular'
+      level: medio
+      description: 'Organize a API em módulos de ingressos, pagamentos e credenciamento, com fronteiras explícitas e um teste que falha se um módulo acessar o banco de outro.'
+      skills: [monolito, módulos, acoplamento]
+    - title: 'Extrair o primeiro microsserviço'
+      level: dificil
+      description: 'Tire o envio de e-mails do monolito para um serviço próprio que consome eventos de uma fila, sem perder mensagens durante a migração.'
+      skills: [microsserviços, eventos, migração]
+    - title: 'Saga da compra'
+      level: dificil
+      description: 'Implemente a compra em três serviços com saga e compensações, e teste a falha em cada passo para provar que nada fica pela metade.'
+      skills: [sagas, compensação, consistência]
+    - title: 'Função serverless de miniaturas'
+      level: medio
+      description: 'Uma função que roda quando uma foto chega no armazenamento, gera a miniatura e grava de volta, com custo medido por mil fotos.'
+      skills: [serverless, eventos, custo]
+    - title: 'App Twelve-Factor'
+      level: facil
+      description: 'Pegue uma aplicação sua e adapte aos doze fatores: configuração no ambiente, logs na saída padrão, processos sem estado e build separado da execução.'
+      skills: [Twelve-Factor, configuração, portabilidade]
+
+- topic: message-brokers
+  projects:
+    - title: 'Fila de e-mails com RabbitMQ'
+      level: medio
+      description: 'A compra publica uma mensagem, workers mandam o e-mail com ack manual, tentativas com espera crescente e fila de mensagens mortas.'
+      skills: [RabbitMQ, ack, dead-letter]
+    - title: 'Eventos de ingressos no Kafka'
+      level: dificil
+      description: 'Publique eventos com o id do ingresso como chave, consuma em dois grupos diferentes, um para o painel e outro para o antifraude, e confirme offsets só depois de processar.'
+      skills: [Kafka, partições, grupos de consumidores]
+    - title: 'Outbox transacional'
+      level: dificil
+      description: 'Grave o evento numa tabela outbox na mesma transação da compra, e um processo separado publica no broker, para nenhum evento se perder nem ser publicado sem a compra.'
+      skills: [outbox, transações, consistência]
+    - title: 'Consumidor idempotente'
+      level: medio
+      description: 'Faça o consumidor guardar os ids já processados e prove, reenviando o mesmo lote várias vezes, que o efeito acontece uma vez só.'
+      skills: [idempotência, entrega pelo menos uma vez, testes]
+    - title: 'Painel da fila'
+      level: facil
+      description: 'Mostre o tamanho da fila, a taxa de entrada e de saída e a idade da mensagem mais antiga, com alerta quando os consumidores não dão conta.'
+      skills: [monitoramento, filas, alertas]
+
+- topic: containerization
+  projects:
+    - title: 'Dockerfile enxuto'
+      level: facil
+      description: 'Containerize a API com build em múltiplos estágios, usuário sem root, imagem final pequena e camadas ordenadas para o cache funcionar.'
+      skills: [Docker, multi-stage, cache de camadas]
+    - title: 'Ambiente local com Compose'
+      level: facil
+      description: 'Um `docker compose up` que sobe API, PostgreSQL, Redis e RabbitMQ, com volumes para os dados e checagens de saúde entre os serviços.'
+      skills: [Docker Compose, volumes, health checks]
+    - title: 'API no Kubernetes'
+      level: dificil
+      description: 'Rode a API num cluster local, como kind ou minikube, com Deployment, Service, probes de readiness e liveness, ConfigMap, Secret e autoescala.'
+      skills: [Kubernetes, probes, HPA]
+    - title: 'Deploy com Helm'
+      level: dificil
+      description: 'Empacote a aplicação num chart do Helm com valores para teste e produção, e faça upgrade e rollback de uma versão.'
+      skills: [Helm, configuração, rollback]
+    - title: 'Containers de sistema com LXC'
+      level: medio
+      description: 'Crie três containers LXC ou Incus que se comportam como servidores, com SSH e serviços próprios, e compare com containers Docker de aplicação.'
+      skills: [LXC, containers de sistema, Linux]
+
+- topic: search-engines
+  projects:
+    - title: 'Busca do catálogo no Elasticsearch'
+      level: medio
+      description: 'Indexe bandas e produtos com mapeamento de campos text e keyword, analisador em português, busca tolerante a erros de digitação e filtros por gênero.'
+      skills: [Elasticsearch, mapeamento, analisadores]
+    - title: 'Autocompletar'
+      level: medio
+      description: 'Um campo de busca que sugere bandas enquanto a pessoa digita, com resposta abaixo de 50 ms e as sugestões mais populares primeiro.'
+      skills: [autocomplete, relevância, desempenho]
+    - title: 'Sincronizar banco e busca'
+      level: dificil
+      description: 'Mantenha o índice de busca em dia com o banco por eventos, com reindexação completa sem indisponibilidade usando aliases.'
+      skills: [sincronização, eventos, reindexação]
+    - title: 'Motor de busca de brinquedo'
+      level: dificil
+      description: 'Escreva um índice invertido com ranqueamento BM25 para os textos do regulamento e compare os resultados com os do Solr ou do Elasticsearch.'
+      skills: [índice invertido, BM25, relevância]
+    - title: 'Facetas e filtros'
+      level: facil
+      description: 'Na busca de produtos, mostre quantos resultados há por categoria, preço e banda, e deixe a pessoa combinar filtros.'
+      skills: [facetas, agregações, Solr]
+
+- topic: real-time
+  projects:
+    - title: 'Placar ao vivo com SSE'
+      level: facil
+      description: 'Um placar da votação do público que atualiza na tela de todos assim que um voto chega, com reconexão automática.'
+      skills: [Server-Sent Events, push, reconexão]
+    - title: 'Chat da transmissão com WebSocket'
+      level: medio
+      description: 'Um chat com salas por show, limite de mensagens por pessoa e moderação, que funciona com várias cópias do servidor usando Redis pub/sub.'
+      skills: [WebSocket, pub/sub, escala horizontal]
+    - title: 'Fila virtual com long polling'
+      level: medio
+      description: 'Uma fila de espera da pré-venda em que o cliente segura um pedido aberto e recebe a nova posição assim que ela muda.'
+      skills: [long polling, filas, tempo real]
+    - title: 'Mapa de lotação ao vivo'
+      level: dificil
+      description: 'Os leitores dos portões mandam eventos, e um mapa do local mostra a lotação de cada setor em tempo real para cem mil telas.'
+      skills: [fan-out, WebSocket, desempenho]
+    - title: 'Comparativo de transportes'
+      level: medio
+      description: 'Implemente a mesma notificação com polling curto, long polling, SSE e WebSocket, e meça latência, pedidos e conexões abertas de cada um.'
+      skills: [comparação, latência, recursos]
+
+- topic: building-for-scale
+  projects:
+    - title: 'Limite de taxa distribuído'
+      level: medio
+      description: 'Um balde de fichas por chave de API guardado no Redis, que funciona com várias cópias da API, responde 429 com `Retry-After` e é testado com carga.'
+      skills: [rate limiting, Redis, 429]
+    - title: 'Disjuntor com alternativa'
+      level: medio
+      description: 'Proteja a chamada ao antifraude com tempo limite, retentativas com jitter e disjuntor, e aprove compras pequenas sem ele quando estiver fora.'
+      skills: [circuit breaker, retentativas, degradação graciosa]
+    - title: 'Observabilidade de ponta a ponta'
+      level: dificil
+      description: 'Instrumente API, fila e worker com OpenTelemetry, e veja num só rastro o caminho de uma compra, com métricas e logs ligados pelo trace id.'
+      skills: [OpenTelemetry, rastros, logs estruturados]
+    - title: 'SLO e alertas pelo sintoma'
+      level: medio
+      description: 'Defina um objetivo de latência e de erros para o checkout, monte um painel com o orçamento de erros e alertas que só tocam quando ele está sendo consumido rápido.'
+      skills: [SLO, alertas, monitoramento]
+    - title: 'Dia da abertura das vendas'
+      level: dificil
+      description: 'Simule 50 vezes a carga normal na API e aplique, um de cada vez, fila para o trabalho adiável, cache, limite de taxa e autoescala, medindo o efeito de cada um.'
+      skills: [testes de carga, loadshifting, autoescala]
